@@ -134,7 +134,7 @@ if username and api_key:
 
             try:
                 system_instruction = get_system_instruction(user_data["age"], current_subject, user_data["summary"])
-                model = genai.GenerativeModel(model_name="gemini-1.5-flash-latest", system_instruction=system_instruction)
+                model = genai.GenerativeModel(model_name="gemini-1.5-flash-001", system_instruction=system_instruction)
                 chat_history = convert_history_for_gemini(user_data["history"][:-1])
                 
                 with st.chat_message("assistant"):
