@@ -66,7 +66,7 @@ def convert_history_for_gemini(history):
     return gemini_history
 
 # --- MAIN APP UI ---
-st.title("🎓 Christine: Your Personal Study Companion")
+st.title("🎓 Christine: AI Tutor")
 
 # --- SESSION STATE SETUP ---
 if "camera_open" not in st.session_state:
