@@ -3,10 +3,14 @@ import json
 import os
 import google.generativeai as genai
 from PIL import Image
-from google.api_core.exceptions import GoogleAPIError
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="Christine AI Tutor", page_icon="🎓")
+st.set_page_config(page_title="Christine AI Tutor", page_icon="🎓", layout="wide")
+
+# *** MODEL VERSION CONTROL ***
+# UPDATE: Set to the requested version. 
+# If this causes a 404 error, try "gemini-2.0-flash-exp" or "gemini-1.5-flash"
+MODEL_NAME = "gemini-2.5-flash"
 
 # 1. SECURE API KEY HANDLING
 api_key = None
@@ -44,10 +48,12 @@ def get_system_instruction(age, subject, history_summary):
     CORE GUIDELINES:
     1. **Slow Processing Support:** Chunk complex questions. Use bullet points. NO walls of text.
     2. **Tone:** Patient, encouraging, non-judgmental. Never rush the student.
-    3. **Image Analysis:** The user may upload a photo of:
-       - **Their own written work:** Transcribe it, ignore minor spelling errors, and provide "Glow" (Praise) and "Grow" (Improvement).
-       - **A textbook/exam question:** Transcribe the question and help them solve it step-by-step (Scaffolding). Do NOT just give the answer.
-    4. **Safety:** Do not answer active exam questions. If frustration is detected, suggest a brain break.
+    3. **Image Analysis:** The user may upload a photo of written work or a textbook question.
+       - Transcribe it (ignore minor spelling errors).
+       - Analyze based on curriculum standards for Age {age}.
+       - Provide "Glow" (Praise) and "Grow" (Improvement).
+       - If it is a question they are stuck on, Scaffolding the answer.
+    4. **Safety:** Do not answer active exam questions.
     """
 
 def convert_history_for_gemini(history):
@@ -61,6 +67,10 @@ def convert_history_for_gemini(history):
 
 # --- MAIN APP UI ---
 st.title("🎓 Christine: Your Personal Study Companion")
+
+# Initialize Session State for Image Loop Prevention
+if "last_processed_file_id" not in st.session_state:
+    st.session_state.last_processed_file_id = None
 
 # USER IDENTIFICATION
 username = st.text_input("Please enter your first name to begin:", key="username_input")
@@ -92,74 +102,84 @@ if username and api_key:
             save_data(db)
             st.rerun()
     else:
-        # CHAT INTERFACE
+        # --- SIDEBAR: ALWAYS AVAILABLE TOOLS ---
+        st.sidebar.title(f"👤 {username}'s Space")
         current_subject = st.sidebar.text_input("Current Subject", value="General Study")
         
-        # Display History
+        st.sidebar.markdown("---")
+        st.sidebar.header("📸 Show Christine Work")
+        
+        # We put Camera and Upload in an Expander so it's neat but always there
+        with st.sidebar.expander("Tap to Open Camera / Upload", expanded=True):
+            cam_input = st.camera_input("Take a photo")
+            file_input = st.file_uploader("Or upload file", type=['png', 'jpg', 'jpeg', 'webp'])
+
+        # --- MAIN CHAT HISTORY ---
         for msg in user_data["history"]:
             role_display = "user" if msg["role"] == "user" else "assistant"
             with st.chat_message(role_display):
                 st.markdown(msg["content"])
 
-        # --- INPUT AREA (UPDATED) ---
-        st.write("---")
-        col_cam, col_upload = st.columns(2)
+        # --- INPUT & LOGIC ---
+        user_text = st.chat_input("Type your question here...")
+
+        # DETERMINE IF WE HAVE A *NEW* IMAGE
+        active_image = None
+        is_new_image = False
         
-        # 1. Camera Input
-        with col_cam:
-            camera_image = st.camera_input("📸 Take a photo")
+        # Priority: Camera > File
+        raw_image_file = cam_input if cam_input else file_input
         
-        # 2. File Upload
-        with col_upload:
-            uploaded_file = st.file_uploader("📂 Or upload a file", type=['png', 'jpg', 'jpeg', 'webp'])
+        if raw_image_file:
+            # Create a unique ID for this specific file upload based on name and size
+            file_id = f"{raw_image_file.name}-{raw_image_file.size}"
+            
+            if file_id != st.session_state.last_processed_file_id:
+                active_image = raw_image_file
+                is_new_image = True
+                st.session_state.last_processed_file_id = file_id  # Mark as processed
 
-        user_text = st.chat_input("Type your question or add details about the image...")
-
-        # LOGIC TO HANDLE EITHER SOURCE
-        image_source = camera_image if camera_image else uploaded_file
-
-        if user_text or image_source:
+        # EXECUTION TRIGGER:
+        if user_text or (is_new_image and active_image):
+            
             display_text = user_text if user_text else ""
             current_turn_content = []
             
-            if user_text: current_turn_content.append(user_text)
+            if user_text: 
+                current_turn_content.append(user_text)
             
             pil_image = None
-            if image_source:
+            if active_image:
                 try:
-                    pil_image = Image.open(image_source)
+                    pil_image = Image.open(active_image)
                     current_turn_content.append(pil_image)
-                    display_text += "\n\n*[Image Attached]*"
+                    display_text += f"\n\n*[Attached Image: {active_image.name}]*"
                     with st.chat_message("user"):
-                        st.image(image_source, caption="Attached Work")
+                        st.image(active_image, caption="Work for Review")
                 except:
-                    st.error("Error loading image.")
+                    st.error("Error processing image.")
 
-            if display_text and not image_source:
+            if display_text and not active_image:
                  with st.chat_message("user"):
                     st.markdown(display_text)
 
-            # Save to local history (text only)
+            # Save to local history
             user_data["history"].append({"role": "user", "content": display_text})
 
             # --- AI GENERATION ---
             try:
                 system_instruction = get_system_instruction(user_data["age"], current_subject, user_data["summary"])
                 
-                # Use a specific, stable model name. 
-                # If 'gemini-1.5-flash' fails, try 'gemini-1.5-flash-latest' or 'gemini-2.0-flash-exp'
-                model = genai.GenerativeModel(model_name="gemini-2.5-flash", system_instruction=system_instruction)
-                
+                # Using the requested variable MODEL_NAME
+                model = genai.GenerativeModel(model_name=MODEL_NAME, system_instruction=system_instruction)
                 chat_history = convert_history_for_gemini(user_data["history"][:-1])
                 
                 with st.chat_message("assistant"):
-                    with st.spinner("Christine is analyzing..."):
+                    with st.spinner("Christine is thinking..."):
                         if pil_image:
-                            # Vision request
                             prompt_parts = [system_instruction] + [msg['parts'][0] for msg in chat_history] + current_turn_content
                             response = model.generate_content(prompt_parts)
                         else:
-                            # Text-only request
                             chat = model.start_chat(history=chat_history)
                             response = chat.send_message(user_text)
                         
@@ -167,14 +187,10 @@ if username and api_key:
                         st.markdown(answer)
                 
                 user_data["history"].append({"role": "model", "content": answer})
-                
-                # Update Summary
-                if len(user_data["history"]) % 6 == 0:
-                     user_data["summary"] += f" | Interaction on {current_subject}."
                 save_data(db)
 
             except Exception as e:
                 st.error(f"Error: {e}")
 
 elif not api_key:
-     st.warning("System Setup Required: API Key missing in Secrets.")
+     st.warning("Please configure your API Key.")
