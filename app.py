@@ -109,39 +109,35 @@ if username and api_key:
         current_subject = st.sidebar.text_input("Current Subject", value="General Study")
         st.sidebar.markdown("---")
         
-        st.sidebar.header("📸 Work Upload")
+        st.sidebar.header("📸 Submit Work")
         
-        # 1. FILE UPLOAD (Always visible)
-        file_input = st.sidebar.file_uploader("Upload File", type=['png', 'jpg', 'jpeg', 'webp'])
+        # 1. DOCUMENT SCANNER (BACK CAMERA on Mobile)
+        # We relabel this to encourage using the system camera
+        st.sidebar.info("📱 **On Mobile?** Use 'Scan Document' below -> Select 'Take Photo' to use your **Back Camera** & Flash.")
+        file_input = st.sidebar.file_uploader("📂 Scan Document / Upload", type=['png', 'jpg', 'jpeg', 'webp'])
         
-        st.sidebar.write("OR")
+        st.sidebar.write("---")
         
-        # 2. CAMERA LOGIC (Snap & Close)
+        # 2. WEBCAM (Usually Front Camera)
         if st.session_state.captured_image is None:
-            # If no photo is currently held, show the button to open camera
             if not st.session_state.camera_open:
-                if st.sidebar.button("📸 Open Camera"):
+                if st.sidebar.button("📸 Use Webcam (Front)"):
                     st.session_state.camera_open = True
                     st.rerun()
-            
-            # If camera is open, show the widget
             else:
-                if st.sidebar.button("❌ Close Camera"):
+                if st.sidebar.button("❌ Close Webcam"):
                     st.session_state.camera_open = False
                     st.rerun()
                     
-                cam_input = st.sidebar.camera_input("Take Photo")
+                cam_input = st.sidebar.camera_input("Snap Photo")
                 
-                # Logic: If photo taken, save it and close camera immediately
                 if cam_input:
                     st.session_state.captured_image = Image.open(cam_input)
                     st.session_state.camera_open = False # Switch off
                     st.rerun()
-
         else:
-            # If we have a captured photo, show it and allow retake
-            st.sidebar.image(st.session_state.captured_image, caption="Ready to send", use_container_width=True)
-            if st.sidebar.button("🗑️ Discard & Retake"):
+            st.sidebar.image(st.session_state.captured_image, caption="Webcam Photo", use_container_width=True)
+            if st.sidebar.button("🗑️ Retake Webcam"):
                 st.session_state.captured_image = None
                 st.rerun()
 
@@ -152,29 +148,26 @@ if username and api_key:
                 st.markdown(msg["content"])
 
         # --- INPUT & PROCESSING ---
-        user_text = st.chat_input("Type your question here (or just send the image)...")
+        user_text = st.chat_input("Type your question here...")
 
-        # Determine if we have an image to process (File OR Camera)
+        # LOGIC: Check inputs
         active_image = None
         is_new_image = False
         
-        # Priority: Camera State > File Upload
+        # Priority: Webcam > File Upload
         if st.session_state.captured_image:
             active_image = st.session_state.captured_image
-            # Generate a pseudo-ID for the camera image
-            # We use a simple memory address or timestamp proxy to track 'newness'
             file_id = f"cam-{str(active_image.size)}"
         elif file_input:
-            active_image = file_input # This is a file object, needs Image.open later if raw
+            active_image = file_input
             file_id = f"file-{file_input.name}-{file_input.size}"
         else:
             file_id = None
 
-        # Check if this is a *new* image we haven't processed yet
         if file_id and file_id != st.session_state.last_processed_file_id:
             is_new_image = True
 
-        # TRIGGER CONDITION
+        # TRIGGER
         if user_text or (is_new_image and active_image):
             
             display_text = user_text if user_text else ""
@@ -186,7 +179,6 @@ if username and api_key:
             pil_image = None
             if active_image:
                 try:
-                    # Handle difference between Camera (already PIL) and File (Bytes)
                     if isinstance(active_image, Image.Image):
                         pil_image = active_image
                     else:
@@ -198,7 +190,6 @@ if username and api_key:
                     with st.chat_message("user"):
                         st.image(pil_image, caption="Work for Review")
                     
-                    # Mark as processed
                     st.session_state.last_processed_file_id = file_id
                     
                 except Exception as e:
@@ -208,27 +199,22 @@ if username and api_key:
                  with st.chat_message("user"):
                     st.markdown(display_text)
 
-            # Save to local history
             user_data["history"].append({"role": "user", "content": display_text})
 
-            # --- AI GENERATION ---
             try:
                 system_instruction = get_system_instruction(user_data["age"], current_subject, user_data["summary"])
-                
                 model = genai.GenerativeModel(model_name=MODEL_NAME, system_instruction=system_instruction)
                 chat_history = convert_history_for_gemini(user_data["history"][:-1])
                 
                 with st.chat_message("assistant"):
-                    with st.spinner("Christine is thinking..."):
+                    with st.spinner("Christine is analyzing..."):
                         if pil_image:
                             prompt_parts = [system_instruction] + [msg['parts'][0] for msg in chat_history] + current_turn_content
                             response = model.generate_content(prompt_parts)
                             
-                            # CLEANUP: If we successfully sent the camera image, clear it from sidebar
+                            # Cleanup webcam image after sending
                             if st.session_state.captured_image:
                                 st.session_state.captured_image = None
-                                # We don't rerun immediately to allow the user to read the answer, 
-                                # but next interaction it will be gone.
                         else:
                             chat = model.start_chat(history=chat_history)
                             response = chat.send_message(user_text)
