@@ -8,7 +8,7 @@ from PIL import Image
 st.set_page_config(page_title="Christine AI Tutor", page_icon="🎓", layout="wide")
 
 # *** MODEL VERSION CONTROL ***
-# If "gemini-2.5-flash" fails, the code will auto-fallback to "gemini-2.0-flash-exp"
+# Tries the newest model first, falls back if your key doesn't have access yet.
 PRIMARY_MODEL = "gemini-2.5-flash"
 FALLBACK_MODEL = "gemini-2.0-flash-exp"
 
@@ -68,7 +68,11 @@ def convert_history_for_gemini(history):
 # --- MAIN APP UI ---
 st.title("🎓 Christine: Your Personal Study Companion")
 
-# Initialize Session State
+# --- SESSION STATE SETUP ---
+if "camera_open" not in st.session_state:
+    st.session_state.camera_open = False
+if "captured_image" not in st.session_state:
+    st.session_state.captured_image = None
 if "last_processed_file_id" not in st.session_state:
     st.session_state.last_processed_file_id = None
 
@@ -108,17 +112,42 @@ if username and api_key:
         st.sidebar.markdown("---")
         
         st.sidebar.header("📸 Submit Work")
-        st.sidebar.caption("Use the camera to show me your written work.")
 
-        # 1. FILE UPLOAD (Works on all devices)
-        file_input = st.sidebar.file_uploader("📂 Upload a Photo", type=['png', 'jpg', 'jpeg', 'webp'])
+        # 1. FILE UPLOAD (Always Visible)
+        file_input = st.sidebar.file_uploader("Upload File", type=['png', 'jpg', 'jpeg', 'webp'])
         
-        st.sidebar.write("--- OR ---")
+        st.sidebar.write("OR")
         
-        # 2. WEBCAM (Simplified for Chromebook stability)
-        # We use an expander so the camera isn't always on, but we remove the complex button logic.
-        with st.sidebar.expander("📸 Use Laptop Camera"):
-            cam_input = st.camera_input("Take Photo")
+        # 2. CAMERA LOGIC (Snap & Close)
+        # If we have a captured image in memory, show it.
+        if st.session_state.captured_image:
+            st.sidebar.image(st.session_state.captured_image, caption="Ready to send", use_container_width=True)
+            if st.sidebar.button("🗑️ Discard & Retake"):
+                st.session_state.captured_image = None
+                st.session_state.camera_open = True # Re-open immediately for convenience
+                st.rerun()
+        
+        # If no image, handle the Camera Toggle
+        else:
+            if not st.session_state.camera_open:
+                # Camera is OFF. Show 'Open' button.
+                if st.sidebar.button("📸 Open Camera"):
+                    st.session_state.camera_open = True
+                    st.rerun()
+            else:
+                # Camera is ON. Show 'Close' button and Widget.
+                if st.sidebar.button("❌ Close Camera"):
+                    st.session_state.camera_open = False
+                    st.rerun()
+                
+                # The Widget
+                cam_input = st.sidebar.camera_input("Take Photo")
+                
+                # If photo is taken, save and CLOSE immediately
+                if cam_input:
+                    st.session_state.captured_image = Image.open(cam_input)
+                    st.session_state.camera_open = False # Turn off hardware
+                    st.rerun()
 
         # --- CHAT HISTORY ---
         for msg in user_data["history"]:
@@ -129,15 +158,15 @@ if username and api_key:
         # --- INPUT & PROCESSING ---
         user_text = st.chat_input("Type your question here...")
 
-        # LOGIC: Check inputs
+        # Determine if we have an image to process
         active_image = None
         is_new_image = False
         
-        # Priority: Camera > File Upload
-        if cam_input:
-            active_image = cam_input
-            # Use size as ID for camera buffer
-            file_id = f"cam-{cam_input.size}"
+        # Priority: Camera State > File Upload
+        if st.session_state.captured_image:
+            active_image = st.session_state.captured_image
+            # Pseudo-ID for camera image
+            file_id = f"cam-{str(active_image.size)}"
         elif file_input:
             active_image = file_input
             file_id = f"file-{file_input.name}-{file_input.size}"
@@ -181,14 +210,17 @@ if username and api_key:
 
             user_data["history"].append({"role": "user", "content": display_text})
 
+            # --- AI GENERATION ---
             try:
                 system_instruction = get_system_instruction(user_data["age"], current_subject, user_data["summary"])
                 chat_history = convert_history_for_gemini(user_data["history"][:-1])
                 
                 with st.chat_message("assistant"):
                     with st.spinner("Christine is analyzing..."):
-                        # Automatic Fallback Logic for Models
+                        
+                        # Fallback Model Logic
                         try:
+                            # Try Primary Model
                             model = genai.GenerativeModel(model_name=PRIMARY_MODEL, system_instruction=system_instruction)
                             if pil_image:
                                 prompt_parts = [system_instruction] + [msg['parts'][0] for msg in chat_history] + current_turn_content
@@ -197,7 +229,7 @@ if username and api_key:
                                 chat = model.start_chat(history=chat_history)
                                 response = chat.send_message(user_text)
                         except Exception:
-                            # If Primary fails, try Fallback silently
+                            # Try Fallback Model
                             model = genai.GenerativeModel(model_name=FALLBACK_MODEL, system_instruction=system_instruction)
                             if pil_image:
                                 prompt_parts = [system_instruction] + [msg['parts'][0] for msg in chat_history] + current_turn_content
@@ -208,6 +240,10 @@ if username and api_key:
                         
                         answer = response.text
                         st.markdown(answer)
+                        
+                        # Clean up camera image after successful send
+                        if st.session_state.captured_image:
+                            st.session_state.captured_image = None
                 
                 user_data["history"].append({"role": "model", "content": answer})
                 save_data(db)
