@@ -8,7 +8,9 @@ from PIL import Image
 st.set_page_config(page_title="Christine AI Tutor", page_icon="🎓", layout="wide")
 
 # *** MODEL VERSION CONTROL ***
-MODEL_NAME = "gemini-2.5-flash"
+# If "gemini-2.5-flash" fails, the code will auto-fallback to "gemini-2.0-flash-exp"
+PRIMARY_MODEL = "gemini-2.5-flash"
+FALLBACK_MODEL = "gemini-2.0-flash-exp"
 
 # 1. SECURE API KEY HANDLING
 api_key = None
@@ -66,11 +68,7 @@ def convert_history_for_gemini(history):
 # --- MAIN APP UI ---
 st.title("🎓 Christine: Your Personal Study Companion")
 
-# --- SESSION STATE INITIALIZATION ---
-if "camera_open" not in st.session_state:
-    st.session_state.camera_open = False
-if "captured_image" not in st.session_state:
-    st.session_state.captured_image = None
+# Initialize Session State
 if "last_processed_file_id" not in st.session_state:
     st.session_state.last_processed_file_id = None
 
@@ -110,36 +108,17 @@ if username and api_key:
         st.sidebar.markdown("---")
         
         st.sidebar.header("📸 Submit Work")
+        st.sidebar.caption("Use the camera to show me your written work.")
+
+        # 1. FILE UPLOAD (Works on all devices)
+        file_input = st.sidebar.file_uploader("📂 Upload a Photo", type=['png', 'jpg', 'jpeg', 'webp'])
         
-        # 1. DOCUMENT SCANNER (BACK CAMERA on Mobile)
-        # We relabel this to encourage using the system camera
-        st.sidebar.info("📱 **On Mobile?** Use 'Scan Document' below -> Select 'Take Photo' to use your **Back Camera** & Flash.")
-        file_input = st.sidebar.file_uploader("📂 Scan Document / Upload", type=['png', 'jpg', 'jpeg', 'webp'])
+        st.sidebar.write("--- OR ---")
         
-        st.sidebar.write("---")
-        
-        # 2. WEBCAM (Usually Front Camera)
-        if st.session_state.captured_image is None:
-            if not st.session_state.camera_open:
-                if st.sidebar.button("📸 Use Webcam (Front)"):
-                    st.session_state.camera_open = True
-                    st.rerun()
-            else:
-                if st.sidebar.button("❌ Close Webcam"):
-                    st.session_state.camera_open = False
-                    st.rerun()
-                    
-                cam_input = st.sidebar.camera_input("Snap Photo")
-                
-                if cam_input:
-                    st.session_state.captured_image = Image.open(cam_input)
-                    st.session_state.camera_open = False # Switch off
-                    st.rerun()
-        else:
-            st.sidebar.image(st.session_state.captured_image, caption="Webcam Photo", use_container_width=True)
-            if st.sidebar.button("🗑️ Retake Webcam"):
-                st.session_state.captured_image = None
-                st.rerun()
+        # 2. WEBCAM (Simplified for Chromebook stability)
+        # We use an expander so the camera isn't always on, but we remove the complex button logic.
+        with st.sidebar.expander("📸 Use Laptop Camera"):
+            cam_input = st.camera_input("Take Photo")
 
         # --- CHAT HISTORY ---
         for msg in user_data["history"]:
@@ -154,10 +133,11 @@ if username and api_key:
         active_image = None
         is_new_image = False
         
-        # Priority: Webcam > File Upload
-        if st.session_state.captured_image:
-            active_image = st.session_state.captured_image
-            file_id = f"cam-{str(active_image.size)}"
+        # Priority: Camera > File Upload
+        if cam_input:
+            active_image = cam_input
+            # Use size as ID for camera buffer
+            file_id = f"cam-{cam_input.size}"
         elif file_input:
             active_image = file_input
             file_id = f"file-{file_input.name}-{file_input.size}"
@@ -203,21 +183,28 @@ if username and api_key:
 
             try:
                 system_instruction = get_system_instruction(user_data["age"], current_subject, user_data["summary"])
-                model = genai.GenerativeModel(model_name=MODEL_NAME, system_instruction=system_instruction)
                 chat_history = convert_history_for_gemini(user_data["history"][:-1])
                 
                 with st.chat_message("assistant"):
                     with st.spinner("Christine is analyzing..."):
-                        if pil_image:
-                            prompt_parts = [system_instruction] + [msg['parts'][0] for msg in chat_history] + current_turn_content
-                            response = model.generate_content(prompt_parts)
-                            
-                            # Cleanup webcam image after sending
-                            if st.session_state.captured_image:
-                                st.session_state.captured_image = None
-                        else:
-                            chat = model.start_chat(history=chat_history)
-                            response = chat.send_message(user_text)
+                        # Automatic Fallback Logic for Models
+                        try:
+                            model = genai.GenerativeModel(model_name=PRIMARY_MODEL, system_instruction=system_instruction)
+                            if pil_image:
+                                prompt_parts = [system_instruction] + [msg['parts'][0] for msg in chat_history] + current_turn_content
+                                response = model.generate_content(prompt_parts)
+                            else:
+                                chat = model.start_chat(history=chat_history)
+                                response = chat.send_message(user_text)
+                        except Exception:
+                            # If Primary fails, try Fallback silently
+                            model = genai.GenerativeModel(model_name=FALLBACK_MODEL, system_instruction=system_instruction)
+                            if pil_image:
+                                prompt_parts = [system_instruction] + [msg['parts'][0] for msg in chat_history] + current_turn_content
+                                response = model.generate_content(prompt_parts)
+                            else:
+                                chat = model.start_chat(history=chat_history)
+                                response = chat.send_message(user_text)
                         
                         answer = response.text
                         st.markdown(answer)
@@ -226,7 +213,7 @@ if username and api_key:
                 save_data(db)
 
             except Exception as e:
-                st.error(f"Error: {e}")
+                st.error(f"Connection Error: {e}")
 
 elif not api_key:
      st.warning("Please configure your API Key.")
