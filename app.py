@@ -8,8 +8,6 @@ from PIL import Image
 st.set_page_config(page_title="Christine AI Tutor", page_icon="🎓", layout="wide")
 
 # *** MODEL VERSION CONTROL ***
-# UPDATE: Set to the requested version. 
-# If this causes a 404 error, try "gemini-2.0-flash-exp" or "gemini-1.5-flash"
 MODEL_NAME = "gemini-2.5-flash"
 
 # 1. SECURE API KEY HANDLING
@@ -68,7 +66,11 @@ def convert_history_for_gemini(history):
 # --- MAIN APP UI ---
 st.title("🎓 Christine: Your Personal Study Companion")
 
-# Initialize Session State for Image Loop Prevention
+# --- SESSION STATE INITIALIZATION ---
+if "camera_open" not in st.session_state:
+    st.session_state.camera_open = False
+if "captured_image" not in st.session_state:
+    st.session_state.captured_image = None
 if "last_processed_file_id" not in st.session_state:
     st.session_state.last_processed_file_id = None
 
@@ -102,44 +104,77 @@ if username and api_key:
             save_data(db)
             st.rerun()
     else:
-        # --- SIDEBAR: ALWAYS AVAILABLE TOOLS ---
+        # --- SIDEBAR TOOLS ---
         st.sidebar.title(f"👤 {username}'s Space")
         current_subject = st.sidebar.text_input("Current Subject", value="General Study")
-        
         st.sidebar.markdown("---")
-        st.sidebar.header("📸 Show Christine Work")
         
-        # We put Camera and Upload in an Expander so it's neat but always there
-        with st.sidebar.expander("Tap to Open Camera / Upload", expanded=True):
-            cam_input = st.camera_input("Take a photo")
-            file_input = st.file_uploader("Or upload file", type=['png', 'jpg', 'jpeg', 'webp'])
+        st.sidebar.header("📸 Work Upload")
+        
+        # 1. FILE UPLOAD (Always visible)
+        file_input = st.sidebar.file_uploader("Upload File", type=['png', 'jpg', 'jpeg', 'webp'])
+        
+        st.sidebar.write("OR")
+        
+        # 2. CAMERA LOGIC (Snap & Close)
+        if st.session_state.captured_image is None:
+            # If no photo is currently held, show the button to open camera
+            if not st.session_state.camera_open:
+                if st.sidebar.button("📸 Open Camera"):
+                    st.session_state.camera_open = True
+                    st.rerun()
+            
+            # If camera is open, show the widget
+            else:
+                if st.sidebar.button("❌ Close Camera"):
+                    st.session_state.camera_open = False
+                    st.rerun()
+                    
+                cam_input = st.sidebar.camera_input("Take Photo")
+                
+                # Logic: If photo taken, save it and close camera immediately
+                if cam_input:
+                    st.session_state.captured_image = Image.open(cam_input)
+                    st.session_state.camera_open = False # Switch off
+                    st.rerun()
 
-        # --- MAIN CHAT HISTORY ---
+        else:
+            # If we have a captured photo, show it and allow retake
+            st.sidebar.image(st.session_state.captured_image, caption="Ready to send", use_container_width=True)
+            if st.sidebar.button("🗑️ Discard & Retake"):
+                st.session_state.captured_image = None
+                st.rerun()
+
+        # --- CHAT HISTORY ---
         for msg in user_data["history"]:
             role_display = "user" if msg["role"] == "user" else "assistant"
             with st.chat_message(role_display):
                 st.markdown(msg["content"])
 
-        # --- INPUT & LOGIC ---
-        user_text = st.chat_input("Type your question here...")
+        # --- INPUT & PROCESSING ---
+        user_text = st.chat_input("Type your question here (or just send the image)...")
 
-        # DETERMINE IF WE HAVE A *NEW* IMAGE
+        # Determine if we have an image to process (File OR Camera)
         active_image = None
         is_new_image = False
         
-        # Priority: Camera > File
-        raw_image_file = cam_input if cam_input else file_input
-        
-        if raw_image_file:
-            # Create a unique ID for this specific file upload based on name and size
-            file_id = f"{raw_image_file.name}-{raw_image_file.size}"
-            
-            if file_id != st.session_state.last_processed_file_id:
-                active_image = raw_image_file
-                is_new_image = True
-                st.session_state.last_processed_file_id = file_id  # Mark as processed
+        # Priority: Camera State > File Upload
+        if st.session_state.captured_image:
+            active_image = st.session_state.captured_image
+            # Generate a pseudo-ID for the camera image
+            # We use a simple memory address or timestamp proxy to track 'newness'
+            file_id = f"cam-{str(active_image.size)}"
+        elif file_input:
+            active_image = file_input # This is a file object, needs Image.open later if raw
+            file_id = f"file-{file_input.name}-{file_input.size}"
+        else:
+            file_id = None
 
-        # EXECUTION TRIGGER:
+        # Check if this is a *new* image we haven't processed yet
+        if file_id and file_id != st.session_state.last_processed_file_id:
+            is_new_image = True
+
+        # TRIGGER CONDITION
         if user_text or (is_new_image and active_image):
             
             display_text = user_text if user_text else ""
@@ -151,13 +186,23 @@ if username and api_key:
             pil_image = None
             if active_image:
                 try:
-                    pil_image = Image.open(active_image)
+                    # Handle difference between Camera (already PIL) and File (Bytes)
+                    if isinstance(active_image, Image.Image):
+                        pil_image = active_image
+                    else:
+                        pil_image = Image.open(active_image)
+                        
                     current_turn_content.append(pil_image)
-                    display_text += f"\n\n*[Attached Image: {active_image.name}]*"
+                    display_text += f"\n\n*[Attached Image]*"
+                    
                     with st.chat_message("user"):
-                        st.image(active_image, caption="Work for Review")
-                except:
-                    st.error("Error processing image.")
+                        st.image(pil_image, caption="Work for Review")
+                    
+                    # Mark as processed
+                    st.session_state.last_processed_file_id = file_id
+                    
+                except Exception as e:
+                    st.error(f"Error processing image: {e}")
 
             if display_text and not active_image:
                  with st.chat_message("user"):
@@ -170,7 +215,6 @@ if username and api_key:
             try:
                 system_instruction = get_system_instruction(user_data["age"], current_subject, user_data["summary"])
                 
-                # Using the requested variable MODEL_NAME
                 model = genai.GenerativeModel(model_name=MODEL_NAME, system_instruction=system_instruction)
                 chat_history = convert_history_for_gemini(user_data["history"][:-1])
                 
@@ -179,6 +223,12 @@ if username and api_key:
                         if pil_image:
                             prompt_parts = [system_instruction] + [msg['parts'][0] for msg in chat_history] + current_turn_content
                             response = model.generate_content(prompt_parts)
+                            
+                            # CLEANUP: If we successfully sent the camera image, clear it from sidebar
+                            if st.session_state.captured_image:
+                                st.session_state.captured_image = None
+                                # We don't rerun immediately to allow the user to read the answer, 
+                                # but next interaction it will be gone.
                         else:
                             chat = model.start_chat(history=chat_history)
                             response = chat.send_message(user_text)
