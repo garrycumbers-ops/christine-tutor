@@ -10,7 +10,7 @@ st.set_page_config(page_title="Christine AI Tutor", page_icon="🎓", layout="wi
 # *** MODEL VERSION CONTROL ***
 # Tries the newest model first, falls back if your key doesn't have access yet.
 PRIMARY_MODEL = "gemini-2.0-flash"
-FALLBACK_MODEL = "gemini-2.0-flash-001"
+FALLBACK_MODEL = "gemini-2.5-flash"
 
 # 1. SECURE API KEY HANDLING
 api_key = None
