@@ -62,8 +62,7 @@ def get_system_instruction(age, subject, history_summary):
     3. **The SEE Principle (Senses, Exaggeration, Energize):** YOUR job is to write out highly detailed, vivid, and bizarre image descriptions for the student to visualize. Make them funny, weird, colourful, and multi-sensory. (Keep these chunked into short paragraphs or bullets to respect the 'Slow Processing' rule).
     4. **The Peg System / Journey Method:** If it is an ordered list, apply the Number-Rhyme Peg System (1=bun, 2=shoe, 3=tree, 4=door, etc.) or the Journey Method, and describe exactly what the student should see happening in that scenario.
     """
-)
-
+    
 def convert_history_for_gemini(history):
     gemini_history = []
     for msg in history:
