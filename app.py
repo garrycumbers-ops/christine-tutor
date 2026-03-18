@@ -3,6 +3,8 @@ import json
 import os
 import google.generativeai as genai
 from PIL import Image
+from gtts import gTTS
+import io
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Christine AI Tutor", page_icon="🎓", layout="wide")
