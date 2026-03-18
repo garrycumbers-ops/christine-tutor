@@ -261,7 +261,10 @@ if username and api_key:
                         if voice_on:
                             try:
                                 # Scrub the markdown symbols out before speaking!
-                                clean_speech = re.sub(r'[*_#`\-•~>|—–]', ' ', answer)
+                                clean_speech = re.sub(r'[^a-zA-Z0-9\s.,!?;:\'"]', ' ', answer)
+                                
+                                # 2. Clean up any weird double spaces left behind by the deleted symbols
+                                clean_speech = re.sub(r'\s+', ' ', clean_speech).strip()
                                 sound_file = io.BytesIO()
                                 # Notice I changed response.text to 'answer' to match your code!
                                 tts = gTTS(text=answer, lang='en', tld='co.uk')
