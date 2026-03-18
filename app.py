@@ -260,10 +260,14 @@ if username and api_key:
                         # --- NEW AUDIO BLOCK START ---
                         if voice_on:
                             try:
-                                # Scrub the markdown symbols out before speaking!
-                                clean_speech = re.sub(r'[^a-zA-Z0-9\s.,!?;:\'"]', ' ', answer)
+                                Delete bolding, italics, headers, and code blocks safely
+                                clean_speech = answer.replace('**', '').replace('#', '').replace('`', '').replace('_', '')
                                 
-                                # 2. Clean up any weird double spaces left behind by the deleted symbols
+                                # 2. The Clever Trick: Delete bullet points (* or -) ONLY if they are at the start of a line. 
+                                # This leaves minus signs in math equations (like x - 5) completely untouched!
+                                clean_speech = re.sub(r'^\s*[\*\-]\s+', ' ', clean_speech, flags=re.MULTILINE)
+                                
+                                # 3. Clean up extra spaces
                                 clean_speech = re.sub(r'\s+', ' ', clean_speech).strip()
                                 sound_file = io.BytesIO()
                                 # Notice I changed response.text to 'answer' to match your code!
