@@ -5,6 +5,7 @@ import google.generativeai as genai
 from PIL import Image
 from gtts import gTTS
 import io
+import re
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Christine AI Tutor", page_icon="🎓", layout="wide")
@@ -260,7 +261,7 @@ if username and api_key:
                         if voice_on:
                             try:
                                 # Scrub the markdown symbols out before speaking!
-                                clean_speech = answer.replace('*', ' ').replace('#', ' ').replace('_', ' ').replace('`', ' ').replace('-', ' ')
+                                clean_speech = re.sub(r'[*_#`\-•~>|—–]', ' ', answer)
                                 sound_file = io.BytesIO()
                                 # Notice I changed response.text to 'answer' to match your code!
                                 tts = gTTS(text=answer, lang='en', tld='co.uk')
