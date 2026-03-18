@@ -119,9 +119,6 @@ if username and api_key:
         st.sidebar.title(f"👤 {username}'s Space")
         current_subject = st.sidebar.text_input("Current Subject", value="General Study")
         st.sidebar.markdown("---")
-
-        st.sidebar.title(f"👤 {username}'s Space")
-        current_subject = st.sidebar.text_input("Current Subject", value="General Study")
         
         # Add the voice toggle right here!
         voice_on = st.sidebar.toggle("🔊 Read Christine's answers out loud")
