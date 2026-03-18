@@ -267,7 +267,7 @@ if username and api_key:
                                 clean_speech = re.sub(r'\s+', ' ', clean_speech).strip()
                                 sound_file = io.BytesIO()
                                 # Notice I changed response.text to 'answer' to match your code!
-                                tts = gTTS(text=answer, lang='en', tld='co.uk')
+                                tts = gTTS(text=clean_speech, lang='en', tld='co.uk')
                                 tts.write_to_fp(sound_file)
                                 st.audio(sound_file, format='audio/mp3', autoplay=True)
                             except Exception as e:
