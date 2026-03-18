@@ -260,7 +260,7 @@ if username and api_key:
                         # --- NEW AUDIO BLOCK START ---
                         if voice_on:
                             try:
-                                Delete bolding, italics, headers, and code blocks safely
+                                # 2. The Clever Trick: Delete bolding, italics, headers, and code blocks safely
                                 clean_speech = answer.replace('**', '').replace('#', '').replace('`', '').replace('_', '')
                                 
                                 # 2. The Clever Trick: Delete bullet points (* or -) ONLY if they are at the start of a line. 
