@@ -119,6 +119,15 @@ if username and api_key:
         st.sidebar.title(f"👤 {username}'s Space")
         current_subject = st.sidebar.text_input("Current Subject", value="General Study")
         st.sidebar.markdown("---")
+
+        st.sidebar.title(f"👤 {username}'s Space")
+        current_subject = st.sidebar.text_input("Current Subject", value="General Study")
+        
+        # Add the voice toggle right here!
+        voice_on = st.sidebar.toggle("🔊 Read Christine's answers out loud")
+        
+        st.sidebar.markdown("---")
+        
         
         st.sidebar.header("📸 Submit Work")
 
@@ -249,6 +258,18 @@ if username and api_key:
                         
                         answer = response.text
                         st.markdown(answer)
+                        
+                        # --- NEW AUDIO BLOCK START ---
+                        if voice_on:
+                            try:
+                                sound_file = io.BytesIO()
+                                # Notice I changed response.text to 'answer' to match your code!
+                                tts = gTTS(text=answer, lang='en', tld='co.uk')
+                                tts.write_to_fp(sound_file)
+                                st.audio(sound_file, format='audio/mp3', autoplay=True)
+                            except Exception as e:
+                                st.error("Audio generation skipped.")
+                        # --- NEW AUDIO BLOCK END ---
                         
                         # Clean up camera image after successful send
                         if st.session_state.captured_image:
