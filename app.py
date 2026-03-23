@@ -172,9 +172,26 @@ if username and api_key:
                 st.markdown(msg["content"])
 
         # --- INPUT & PROCESSING ---
-        # 1. Add the microphone widget right above the text box
+        
+        # Inject CSS to float the microphone at the bottom
+        st.markdown("""
+            <style>
+            /* Pin the microphone just above the chat text box */
+            [data-testid="stAudioInput"] {
+                position: fixed;
+                bottom: 85px; 
+                z-index: 999;
+            }
+            /* Add padding to the bottom of the page so chat messages don't hide behind the mic */
+            .block-container {
+                padding-bottom: 150px !important;
+            }
+            </style>
+            """, unsafe_allow_html=True)
+
         user_audio = st.audio_input("🎤 Talk to Christine")
         user_text = st.chat_input("...or type your question here")
+
 
         # Determine if we have an image to process
         active_image = None
