@@ -226,7 +226,7 @@ if username and api_key:
                     "data": user_audio.getvalue()
                 }
                 current_turn_content.append(audio_part)
-                display_text += "\n\n*[🎤 Voice Message]*"
+                display_text += "\n\n[🎤 Voice Message]"
             
             # --- Process Image ---
             pil_image = None
@@ -238,7 +238,7 @@ if username and api_key:
                         pil_image = Image.open(active_image)
                         
                     current_turn_content.append(pil_image)
-                    display_text += f"\n\n*[📸 Attached Image]*"
+                    display_text += f"\n\n[📸 Attached Image]"
                     st.session_state.last_processed_file_id = file_id
                 except Exception as e:
                     st.error(f"Error processing image: {e}")
