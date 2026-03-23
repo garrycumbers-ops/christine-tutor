@@ -172,7 +172,9 @@ if username and api_key:
                 st.markdown(msg["content"])
 
         # --- INPUT & PROCESSING ---
-        user_text = st.chat_input("Type your question here...")
+        # 1. Add the microphone widget right above the text box
+        user_audio = st.audio_input("🎤 Talk to Christine")
+        user_text = st.chat_input("...or type your question here")
 
         # Determine if we have an image to process
         active_image = None
@@ -181,7 +183,6 @@ if username and api_key:
         # Priority: Camera State > File Upload
         if st.session_state.captured_image:
             active_image = st.session_state.captured_image
-            # Pseudo-ID for camera image
             file_id = f"cam-{str(active_image.size)}"
         elif file_input:
             active_image = file_input
@@ -193,14 +194,24 @@ if username and api_key:
             is_new_image = True
 
         # TRIGGER
-        if user_text or (is_new_image and active_image):
+        if user_text or (is_new_image and active_image) or user_audio:
             
             display_text = user_text if user_text else ""
             current_turn_content = []
             
             if user_text: 
                 current_turn_content.append(user_text)
+
+            # --- NEW: Process Audio ---
+            if user_audio:
+                audio_part = {
+                    "mime_type": "audio/wav",
+                    "data": user_audio.getvalue()
+                }
+                current_turn_content.append(audio_part)
+                display_text += "\n\n*[🎤 Voice Message]*"
             
+            # --- Process Image ---
             pil_image = None
             if active_image:
                 try:
@@ -210,19 +221,19 @@ if username and api_key:
                         pil_image = Image.open(active_image)
                         
                     current_turn_content.append(pil_image)
-                    display_text += f"\n\n*[Attached Image]*"
-                    
-                    with st.chat_message("user"):
-                        st.image(pil_image, caption="Work for Review")
-                    
+                    display_text += f"\n\n*[📸 Attached Image]*"
                     st.session_state.last_processed_file_id = file_id
-                    
                 except Exception as e:
                     st.error(f"Error processing image: {e}")
 
-            if display_text and not active_image:
-                 with st.chat_message("user"):
-                    st.markdown(display_text)
+            # --- Clean UI Display for the Student ---
+            with st.chat_message("user"):
+                if user_text:
+                    st.markdown(user_text)
+                if active_image and pil_image:
+                    st.image(pil_image, caption="Work for Review")
+                if user_audio:
+                    st.audio(user_audio) # Shows an audio player so they know it sent!
 
             user_data["history"].append({"role": "user", "content": display_text})
 
@@ -238,7 +249,7 @@ if username and api_key:
                         try:
                             # Try Primary Model
                             model = genai.GenerativeModel(model_name=PRIMARY_MODEL, system_instruction=system_instruction)
-                            if pil_image:
+                            if pil_image or user_audio:
                                 prompt_parts = [system_instruction] + [msg['parts'][0] for msg in chat_history] + current_turn_content
                                 response = model.generate_content(prompt_parts)
                             else:
@@ -247,7 +258,7 @@ if username and api_key:
                         except Exception:
                             # Try Fallback Model
                             model = genai.GenerativeModel(model_name=FALLBACK_MODEL, system_instruction=system_instruction)
-                            if pil_image:
+                            if pil_image or user_audio:
                                 prompt_parts = [system_instruction] + [msg['parts'][0] for msg in chat_history] + current_turn_content
                                 response = model.generate_content(prompt_parts)
                             else:
