@@ -283,6 +283,17 @@ if username and api_key:
                                 response = chat.send_message(user_text)
                         
                         answer = response.text
+                        
+                        # --- CLEANUP: Stop the AI from mimicking the mic label ---
+                        answer = answer.replace("🎤 Voice Response", "")
+                        answer = answer.replace("🎤 Voice response", "")
+                        answer = answer.replace("🎤 Voice Message", "")
+                        answer = answer.replace("🎤 [Voice Message]", "")
+                        answer = answer.replace("*[🎤 Voice Message]*", "")
+                        
+                        # Strip any leftover blank lines or spaces at the top
+                        answer = answer.strip()
+                        
                         st.markdown(answer)
                         
                         # --- NEW AUDIO BLOCK START ---
