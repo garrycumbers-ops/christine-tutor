@@ -303,23 +303,23 @@ if username and api_key:
                         # --- NEW AUDIO BLOCK START ---
                         if voice_on:
                             try:
-                                # 2. The Clever Trick: Delete bolding, italics, headers, and code blocks safely
                                 clean_speech = answer.replace('**', '').replace('#', '').replace('`', '').replace('_', '')
-                                
-                                # 2. The Clever Trick: Delete bullet points (* or -) ONLY if they are at the start of a line. 
-                                # This leaves minus signs in math equations (like x - 5) completely untouched!
                                 clean_speech = re.sub(r'^\s*[\*\-]\s+', ' ', clean_speech, flags=re.MULTILINE)
-                                
-                                # 3. Clean up extra spaces
                                 clean_speech = re.sub(r'\s+', ' ', clean_speech).strip()
+                                
                                 sound_file = io.BytesIO()
-                                # Notice I changed response.text to 'answer' to match your code!
                                 tts = gTTS(text=clean_speech, lang='en', tld='co.uk')
                                 tts.write_to_fp(sound_file)
-                                st.audio(sound_file, format='audio/mp3')
+                                
+                                # THE FIX: Rewind the virtual tape back to 0 seconds!
+                                sound_file.seek(0)
+                                
+                                # THE APPLE FIX: Changed format from audio/mp3 to audio/mpeg
+                                st.audio(sound_file, format='audio/mpeg')
                             except Exception as e:
-                                st.error("Audio generation skipped.")
+                                st.error(f"Audio generation skipped: {e}")
                         # --- NEW AUDIO BLOCK END ---
+
                         
                         # Clean up camera image after successful send
                         if st.session_state.captured_image:
