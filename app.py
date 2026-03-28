@@ -34,7 +34,13 @@ def load_data():
                 hist = json.loads(row["History"])
             except:
                 hist = []
-            db[str(row["Name"])] = {"summary": str(row["Summary"]), "history": hist}
+                
+            # Grab the age from the new column!
+            student_age = row.get("Age", None)
+            if student_age == "":  # Handle empty cells
+                student_age = None
+                
+            db[str(row["Name"])] = {"summary": str(row["Summary"]), "history": hist, "age": student_age}
     except Exception as e:
         pass # Fails silently if the sheet is completely blank
     return db
