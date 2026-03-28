@@ -50,7 +50,7 @@ def save_current_student(name, data):
         # If found, update their Summary (Col 2) and History (Col 3)
         sheet.update_cell(cell.row, 2, summary)
         sheet.update_cell(cell.row, 3, hist_str)
-    except gspread.CellNotFound:
+    except Exception:
         # If they are a brand new student, add them to the bottom of the sheet!
         sheet.append_row([name, summary, hist_str])
 # ----------------------------------
