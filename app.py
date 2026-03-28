@@ -6,6 +6,54 @@ from PIL import Image
 from gtts import gTTS
 import io
 import re
+import json
+import gspread
+
+# --- GOOGLE SHEETS ENGINE ---
+@st.cache_resource
+def connect_to_sheets():
+    # 1. Open the vault and grab the keys
+    creds_dict = json.loads(st.secrets["GOOGLE_CREDENTIALS"])
+    # 2. Hand the keys to the Google robot
+    gc = gspread.service_account_from_dict(creds_dict)
+    # 3. Open your specific spreadsheet (Make sure this name matches exactly!)
+    return gc.open("Christine Student Memory").sheet1
+
+try:
+    sheet = connect_to_sheets()
+except Exception as e:
+    st.error(f"Could not connect to Google Sheets. Check your exact spreadsheet name: {e}")
+
+def load_data():
+    db = {}
+    try:
+        # Download the whole spreadsheet into Christine's brain
+        records = sheet.get_all_records()
+        for row in records:
+            try:
+                hist = json.loads(row["History"])
+            except:
+                hist = []
+            db[str(row["Name"])] = {"summary": str(row["Summary"]), "history": hist}
+    except Exception as e:
+        pass # Fails silently if the sheet is completely blank
+    return db
+
+def save_current_student(name, data):
+    # This specifically updates just ONE student's row so it is lightning fast
+    summary = data["summary"]
+    hist_str = json.dumps(data["history"])
+    
+    try:
+        # Look for the student's name in Column 1 (A)
+        cell = sheet.find(name, in_column=1)
+        # If found, update their Summary (Col 2) and History (Col 3)
+        sheet.update_cell(cell.row, 2, summary)
+        sheet.update_cell(cell.row, 3, hist_str)
+    except gspread.exceptions.CellNotFound:
+        # If they are a brand new student, add them to the bottom of the sheet!
+        sheet.append_row([name, summary, hist_str])
+# ----------------------------------
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Christine AI Tutor", page_icon="🎓", layout="wide")
@@ -90,9 +138,19 @@ if "captured_image" not in st.session_state:
 if "last_processed_file_id" not in st.session_state:
     st.session_state.last_processed_file_id = None
 
+# Download the student history from Google Sheets
+db = load_data()
+
 # USER IDENTIFICATION
 username = st.text_input("Please enter your first name to begin:", key="username_input")
 
+if username:
+    # If they are in the database, load their data. If not, make a new profile!
+    if username not in db:
+        db[username] = {"summary": "New student.", "history": []}
+    
+    user_data = db[username]
+    
 if username and api_key:
     genai.configure(api_key=api_key)
     db = load_data()
