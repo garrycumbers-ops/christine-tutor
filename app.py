@@ -47,18 +47,22 @@ def load_data():
 
 def save_current_student(name, data):
     # This specifically updates just ONE student's row so it is lightning fast
-    summary = data["summary"]
-    hist_str = json.dumps(data["history"])
+    summary = data.get("summary", "")
+    hist_str = json.dumps(data.get("history", []))
+    age = data.get("age", "") # Grab the age from memory
     
     try:
         # Look for the student's name in Column 1 (A)
         cell = sheet.find(name, in_column=1)
-        # If found, update their Summary (Col 2) and History (Col 3)
+        # If found, update Summary (Col 2), History (Col 3), and Age (Col 4)
         sheet.update_cell(cell.row, 2, summary)
         sheet.update_cell(cell.row, 3, hist_str)
+        sheet.update_cell(cell.row, 4, age)
+        
     except Exception:
         # If they are a brand new student, add them to the bottom of the sheet!
-        sheet.append_row([name, summary, hist_str])
+        sheet.append_row([name, summary, hist_str, age])
+
 # ----------------------------------
 
 # --- CONFIGURATION ---
