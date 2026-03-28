@@ -70,23 +70,6 @@ if "GEMINI_API_KEY" in st.secrets:
 else:
     api_key = st.sidebar.text_input("Enter Google Gemini API Key", type="password")
 
-# File to store history
-DB_FILE = "student_history.json"
-
-# --- HELPER FUNCTIONS ---
-def load_data():
-    if not os.path.exists(DB_FILE):
-        return {}
-    try:
-        with open(DB_FILE, "r") as f:
-            return json.load(f)
-    except:
-        return {}
-
-def save_data(data):
-    with open(DB_FILE, "w") as f:
-        json.dump(data, f, indent=4)
-
 def get_system_instruction(age, subject, history_summary):
     return f"""
     You are "Christine," an empathetic AI Educational Assistant and expert memory coach for students aged 11-18. You specialize in interactive learning, exam preparation, and Kevin Horsley's 'Unlimited Memory' techniques.
@@ -175,7 +158,7 @@ if username and api_key:
                 "role": "model",
                 "content": f"Hello {username}! I'm ready to help you with {subject_input}. How can we start?"
             })
-            save_data(db)
+            save_current_student(username, user_data)
             st.rerun()
     else:
         # --- SIDEBAR TOOLS ---
@@ -185,9 +168,35 @@ if username and api_key:
         
         # Add the voice toggle right here!
         voice_on = st.sidebar.toggle("🔊 Read Christine's answers out loud")
+
+         # --- NEW: STUDENT MEMORY ENGINE ---
+        st.sidebar.header("🧠 Christine's Notes")
+        st.sidebar.caption("Current Focus:")
+        st.sidebar.info(user_data["summary"])
         
+        if st.sidebar.button("📝 Analyze Session & Update Profile"):
+            with st.spinner("Christine is analyzing your progress..."):
+                try:
+                    recent_chat = str(user_data["history"][-10:]) 
+                    memory_prompt = f"""
+                    You are an expert teacher analyzing a student's recent chat history.
+                    Current Profile: {user_data['summary']}
+                    Recent Chat: {recent_chat}
+                    
+                    TASK: Update the student's profile in exactly 2 or 3 sentences. 
+                    Focus strictly on their weaknesses, the specific mistakes they just made, and what topics or concepts they need to review next time. Do not use formatting.
+                    """
+                    analyzer = genai.GenerativeModel(model_name=PRIMARY_MODEL)
+                    memory_response = analyzer.generate_content(memory_prompt)
+                    
+                    user_data["summary"] = memory_response.text.strip()
+                    
+                    # ---> SAVE TO GOOGLE SHEETS <---
+                    save_current_student(username, user_data)
+                    st.rerun()
+                except Exception as e:
+                    st.sidebar.error("Could not update memory right now.")
         st.sidebar.markdown("---")
-        
         
         st.sidebar.header("📸 Submit Work")
 
@@ -377,14 +386,13 @@ if username and api_key:
                             except Exception as e:
                                 st.error(f"Audio generation skipped: {e}")
                         # --- NEW AUDIO BLOCK END ---
-
                         
                         # Clean up camera image after successful send
                         if st.session_state.captured_image:
                             st.session_state.captured_image = None
                 
                 user_data["history"].append({"role": "model", "content": answer})
-                save_data(db)
+                save_current_student(username, user_data)
 
             except Exception as e:
                 st.error(f"Connection Error: {e}")
