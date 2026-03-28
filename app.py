@@ -131,27 +131,25 @@ if "captured_image" not in st.session_state:
 if "last_processed_file_id" not in st.session_state:
     st.session_state.last_processed_file_id = None
 
-# Download the student history from Google Sheets
-db = load_data()
-
 # USER IDENTIFICATION
 username = st.text_input("Please enter your first name to begin:", key="username_input")
 
-if username:
-    # If they are in the database, load their data. If not, make a new profile!
-    if username not in db:
-        db[username] = {"summary": "New student.", "history": []}
-    
-    user_data = db[username]
-    
 if username and api_key:
     genai.configure(api_key=api_key)
-    db = load_data()
     
-    if username not in db:
-        db[username] = {"age": None, "history": [], "summary": "New student."}
-    
-    user_data = db[username]
+    # --- FAST MEMORY ---
+    # Only download from Google once per login to avoid lag!
+    if "user_data" not in st.session_state or st.session_state.get("current_user") != username:
+        with st.spinner("Downloading profile..."):
+            db = load_data()
+            if username not in db:
+                st.session_state.user_data = {"age": None, "history": [], "summary": "New student."}
+            else:
+                st.session_state.user_data = db[username]
+            st.session_state.current_user = username
+            
+    # Read from the fast memory, not Google Sheets
+    user_data = st.session_state.user_data
 
     # SESSION INITIALIZATION
     if not user_data["age"]:
