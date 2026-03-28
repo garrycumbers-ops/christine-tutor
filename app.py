@@ -316,7 +316,7 @@ if username and api_key:
                                 # Notice I changed response.text to 'answer' to match your code!
                                 tts = gTTS(text=clean_speech, lang='en', tld='co.uk')
                                 tts.write_to_fp(sound_file)
-                                st.audio(sound_file, format='audio/mp3', autoplay=True)
+                                st.audio(sound_file, format='audio/mp3')
                             except Exception as e:
                                 st.error("Audio generation skipped.")
                         # --- NEW AUDIO BLOCK END ---
