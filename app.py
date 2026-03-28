@@ -152,7 +152,7 @@ if username and api_key:
     user_data = st.session_state.user_data
 
     # SESSION INITIALIZATION
-    if not user_data.get["age"]:
+    if not user_data.get("age"):
         st.info(f"Hi {username}! I'm Christine. Let's get set up.")
         col1, col2 = st.columns(2)
         with col1:
