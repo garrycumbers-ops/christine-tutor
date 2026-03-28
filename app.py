@@ -315,7 +315,7 @@ if username and api_key:
                                 sound_file.seek(0)
                                 
                                 # THE APPLE FIX: Changed format from audio/mp3 to audio/mpeg
-                                st.audio(sound_file, format='audio/mpeg')
+                                st.audio(sound_file, format='audio/mpeg', autoplay=True)
                             except Exception as e:
                                 st.error(f"Audio generation skipped: {e}")
                         # --- NEW AUDIO BLOCK END ---
