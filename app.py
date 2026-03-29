@@ -46,21 +46,23 @@ def load_data():
     return db
 
 def save_current_student(name, data):
-    # This specifically updates just ONE student's row so it is lightning fast
+    # This specifically updates just ONE student's row
     summary = data.get("summary", "")
-    hist_str = json.dumps(data.get("history", []))
-    age = data.get("age", "") # Grab the age from memory
+    
+    # --- THE ROLLING WINDOW ---
+    # We only save the last 10 messages to prevent database overload!
+    full_history = data.get("history", [])
+    recent_history = full_history[-10:] if len(full_history) > 10 else full_history
+    hist_str = json.dumps(recent_history)
+    
+    age = data.get("age", "") 
     
     try:
-        # Look for the student's name in Column 1 (A)
         cell = sheet.find(name, in_column=1)
-        # If found, update Summary (Col 2), History (Col 3), and Age (Col 4)
         sheet.update_cell(cell.row, 2, summary)
         sheet.update_cell(cell.row, 3, hist_str)
         sheet.update_cell(cell.row, 4, age)
-        
     except Exception:
-        # If they are a brand new student, add them to the bottom of the sheet!
         sheet.append_row([name, summary, hist_str, age])
 
 # ----------------------------------
