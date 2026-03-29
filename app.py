@@ -148,6 +148,8 @@ if username and api_key:
                 st.session_state.user_data = {"age": None, "history": [], "summary": "New student."}
             else:
                 st.session_state.user_data = db[username]
+                   # THE CLEAN SLATE: Erase the visual chat log so it's a fresh session!
+                st.session_state.user_data["history"] = []
             st.session_state.current_user = username
             
     # Read from the fast memory, not Google Sheets
