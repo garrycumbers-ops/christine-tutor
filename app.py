@@ -447,8 +447,8 @@ if username and api_key:
                 user_data["history"].append({"role": "model", "content": answer})
                 
                 # --- SILENT AUTO-DOSSIER ENGINE ---
-                # Check if the chat history length is a multiple of 8 (4 complete back-and-forths)
-                if len(user_data["history"]) > 0 and len(user_data["history"]) % 8 == 0:
+                # THE FIX: Catch lengths of 8, 9, 16, 17, etc., so the math never skips!
+                if len(user_data["history"]) in [8, 9, 16, 17, 24, 25]:
                     with st.spinner("Christine is taking notes on your progress..."):
                         try:
                             recent_chat = str(user_data["history"][-8:]) 
@@ -477,11 +477,14 @@ if username and api_key:
                                 memory_response = analyzer.generate_content(memory_prompt)
                             
                             user_data["summary"] = memory_response.text.strip()
+                            
                         except Exception as e:
-                            pass # Fails silently so it doesn't interrupt the student's lesson!
+                            # THE FIX: Stop hiding errors! Show a small warning so we know if the API failed.
+                            st.warning(f"Dossier update skipped. Error: {e}")
 
                 # Save everything (chat and new summary) to Google Sheets
                 save_current_student(username, user_data)
+
 
             except Exception as e:
                 st.error(f"Connection Error: {e}")
