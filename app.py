@@ -170,10 +170,14 @@ if username and api_key:
                 st.session_state.user_data = {"age": None, "history": [], "summary": "New student."}
             else:
                 st.session_state.user_data = db[username]
-                   # THE CLEAN SLATE: Erase the visual chat log so it's a fresh session!
-                st.session_state.user_data["history"] = []
+                # THE CLEAN SLATE & GREETING: Clear the old log, but inject a new greeting!
+                # We use .title() so if the database says "john", it prints as "John"
+                st.session_state.user_data["history"] = [{
+                    "role": "model", 
+                    "content": f"Welcome back, {username.title()}! I've reviewed my notes from last time. What subject are we tackling today?"
+                }]
             st.session_state.current_user = username
-            
+
     # Read from the fast memory, not Google Sheets
     user_data = st.session_state.user_data
 
