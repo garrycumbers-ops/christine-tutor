@@ -423,6 +423,42 @@ if username and api_key:
                             st.session_state.captured_image = None
                 
                 user_data["history"].append({"role": "model", "content": answer})
+                
+                # --- SILENT AUTO-DOSSIER ENGINE ---
+                # Check if the chat history length is a multiple of 8 (4 complete back-and-forths)
+                if len(user_data["history"]) > 0 and len(user_data["history"]) % 8 == 0:
+                    with st.spinner("Christine is taking notes on your progress..."):
+                        try:
+                            recent_chat = str(user_data["history"][-8:]) 
+                            memory_prompt = f"""
+                            You are an expert teacher maintaining a permanent, long-term dossier on a student.
+                            
+                            CURRENT MASTER DOSSIER (Do not lose this information!): 
+                            {user_data['summary']}
+                            
+                            RECENT CHAT (New Info to integrate): 
+                            {recent_chat}
+                            
+                            TASK: Update the Master Dossier with the new insights. 
+                            
+                            CRITICAL RULES:
+                            1. NEVER delete information about previous subjects. You are building a permanent record.
+                            2. Organize your notes using clear Subject headings (e.g., "🧬 SCIENCE:", "📐 MATH:").
+                            3. Under each subject, keep short bullet points of weaknesses, and what to review next time.
+                            """
+                            # Fallback Logic
+                            try:
+                                analyzer = genai.GenerativeModel(model_name=PRIMARY_MODEL)
+                                memory_response = analyzer.generate_content(memory_prompt)
+                            except Exception:
+                                analyzer = genai.GenerativeModel(model_name=FALLBACK_MODEL)
+                                memory_response = analyzer.generate_content(memory_prompt)
+                            
+                            user_data["summary"] = memory_response.text.strip()
+                        except Exception as e:
+                            pass # Fails silently so it doesn't interrupt the student's lesson!
+
+                # Save everything (chat and new summary) to Google Sheets
                 save_current_student(username, user_data)
 
             except Exception as e:
