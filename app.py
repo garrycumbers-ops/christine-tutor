@@ -155,7 +155,8 @@ if "last_processed_file_id" not in st.session_state:
     st.session_state.last_processed_file_id = None
 
 # USER IDENTIFICATION
-username = st.text_input("Please enter your first name to begin:", key="username_input")
+raw_username = st.text_input("Please enter your first name to begin:", key="username_input")
+username = raw_username.strip().lower() if raw_username else ""
 
 if username and api_key:
     genai.configure(api_key=api_key)
