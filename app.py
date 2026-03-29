@@ -27,23 +27,44 @@ except Exception as e:
 def load_data():
     db = {}
     try:
-        # Download the whole spreadsheet into Christine's brain
-        records = sheet.get_all_records()
-        for row in records:
-            try:
-                hist = json.loads(row["History"])
-            except:
-                hist = []
+        # THE FIX: get_all_values() ignores headers and just grabs the raw grid data!
+        rows = sheet.get_all_values()
+        
+        if len(rows) <= 1:
+            return db # Sheet is completely empty or only has headers
+        
+        # Skip the first row (the headers) and read the data
+        for row in rows[1:]:
+            # Safety net: ensure the row has exactly 4 columns
+            while len(row) < 4:
+                row.append("")
                 
-            # Grab the age from the new column!
-            student_age = row.get("Age", None)
-            if student_age == "":  # Handle empty cells
-                student_age = None
+            # Grab strictly by Column Number (0=A, 1=B, 2=C, 3=D)
+            name_col = str(row[0]).strip().lower()
+            summary_col = str(row[1]).strip()
+            history_col = str(row[2]).strip()
+            age_col = str(row[3]).strip()
+            
+            if name_col and name_col not in db:
+                try:
+                    hist = json.loads(history_col)
+                except:
+                    hist = []
+                    
+                if age_col == "" or age_col == "0":
+                    student_age = None
+                else:
+                    student_age = age_col
                 
-            db[str(row["Name"])] = {"summary": str(row["Summary"]), "history": hist, "age": student_age}
+                # Load the dossier into memory!
+                db[name_col] = {"summary": summary_col, "history": hist, "age": student_age}
+                
+        return db
+        
     except Exception as e:
-        pass # Fails silently if the sheet is completely blank
-    return db
+        # Hard stop if Google is too slow
+        st.error(f"⚠️ Database connection paused. Please refresh the page to try again. (System code: {e})")
+        st.stop() 
 
 def save_current_student(name, data):
     # This specifically updates just ONE student's row
