@@ -194,16 +194,25 @@ if username and api_key:
                     TASK: Update the student's profile in exactly 2 or 3 sentences. 
                     Focus strictly on their weaknesses, the specific mistakes they just made, and what topics or concepts they need to review next time. Do not use formatting.
                     """
-                    analyzer = genai.GenerativeModel(model_name=PRIMARY_MODEL)
-                    memory_response = analyzer.generate_content(memory_prompt)
+                    
+                    # Smart Fallback logic (just like the main chat!)
+                    try:
+                        analyzer = genai.GenerativeModel(model_name=PRIMARY_MODEL)
+                        memory_response = analyzer.generate_content(memory_prompt)
+                    except Exception:
+                        analyzer = genai.GenerativeModel(model_name=FALLBACK_MODEL)
+                        memory_response = analyzer.generate_content(memory_prompt)
                     
                     user_data["summary"] = memory_response.text.strip()
                     
                     # ---> SAVE TO GOOGLE SHEETS <---
                     save_current_student(username, user_data)
                     st.rerun()
+                    
                 except Exception as e:
-                    st.sidebar.error("Could not update memory right now.")
+                    # Print the EXACT error so we know what's wrong!
+                    st.sidebar.error(f"Error: {e}")
+
         st.sidebar.markdown("---")
         
         st.sidebar.header("📸 Submit Work")
