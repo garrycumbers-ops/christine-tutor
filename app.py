@@ -463,21 +463,23 @@ if username and api_key:
                         try:
                             recent_chat = str(user_data["history"][-8:]) 
                             memory_prompt = f"""
-                            You are an expert teacher maintaining a permanent, long-term dossier on a student.
+                            You are an expert teacher maintaining a highly compressed, long-term dossier on a student's KNOWLEDGE GAPS.
                             
-                            CURRENT MASTER DOSSIER (Do not lose this information!): 
+                            CURRENT DOSSIER (Active Gaps): 
                             {user_data['summary']}
                             
-                            RECENT CHAT (New Info to integrate): 
+                            RECENT CHAT: 
                             {recent_chat}
                             
-                            TASK: Update the Master Dossier with the new insights. 
+                            TASK: Update the dossier strictly focusing on what the student DOES NOT know.
                             
-                            CRITICAL RULES:
-                            1. NEVER delete information about previous subjects. You are building a permanent record.
-                            2. Organize your notes using clear Subject headings (e.g., "🧬 SCIENCE:", "📐 MATH:").
-                            3. Under each subject, keep short bullet points of weaknesses, and what to review next time.
+                            CRITICAL RULES FOR SPACE SAVING:
+                            1. RECORD ONLY GAPS: Only log weaknesses, misunderstandings, and specific topics that need review. Do NOT record what the student already knows or got right.
+                            2. PRUNE RESOLVED ISSUES: If the recent chat shows the student has mastered a past weakness, DELETE that weakness from the dossier completely. 
+                            3. ORGANIZE: Use Subject headings (e.g., "🧬 SCIENCE:"). Under each, keep short, punchy bullet points of active gaps.
+                            4. BE RUTHLESS: Keep the entire dossier as short as possible. If they know it, drop it from the notes.
                             """
+                            
                             # Fallback Logic
                             try:
                                 analyzer = genai.GenerativeModel(model_name=PRIMARY_MODEL)
