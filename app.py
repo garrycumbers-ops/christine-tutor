@@ -189,12 +189,22 @@ if username and api_key:
                 try:
                     recent_chat = str(user_data["history"][-10:]) 
                     memory_prompt = f"""
-                    You are an expert teacher analyzing a student's recent chat history.
-                    Current Profile: {user_data['summary']}
-                    Recent Chat: {recent_chat}
+                    You are an expert teacher maintaining a permanent, long-term dossier on a student.
                     
-                    TASK: Update the student's profile in exactly 2 or 3 sentences. 
-                    Focus strictly on their weaknesses, the specific mistakes they just made, and what topics or concepts they need to review next time. Do not use formatting.
+                    CURRENT MASTER DOSSIER (Do not lose this information!): 
+                    {user_data['summary']}
+                    
+                    RECENT CHAT (New Info to integrate): 
+                    {recent_chat}
+                    
+                    TASK: Update the Master Dossier with the new insights. 
+                    
+                    CRITICAL RULES:
+                    1. NEVER delete information about previous subjects. You are building a permanent record.
+                    2. Organize your notes using clear Subject headings (e.g., "🧬 SCIENCE:", "📐 MATH:").
+                    3. Under each subject, keep short bullet points of their weaknesses, what they just learned, and what to review next time.
+                    4. If the recent chat is about a brand new subject, create a new heading for it at the bottom.
+                    5. Keep the total output concise and strictly focused on academic progress.
                     """
                     
                     # Smart Fallback logic (just like the main chat!)
