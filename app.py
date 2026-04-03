@@ -16,13 +16,31 @@ def connect_to_sheets():
     creds_dict = json.loads(st.secrets["GOOGLE_CREDENTIALS"])
     # 2. Hand the keys to the Google robot
     gc = gspread.service_account_from_dict(creds_dict)
-    # 3. Open your specific spreadsheet (Make sure this name matches exactly!)
-    return gc.open("Christine Student Memory").sheet1
+    # 3. Open the entire workbook, not just sheet1
+    return gc.open("Christine Student Memory")
 
 try:
-    sheet = connect_to_sheets()
+    workbook = connect_to_sheets()
+    sheet = workbook.sheet1  # Your main memory database stays completely safe!
+    syllabus_sheet = workbook.worksheet("Syllabus") # The new roadmap tab
 except Exception as e:
     st.error(f"Could not connect to Google Sheets. Check your exact spreadsheet name: {e}")
+
+# --- NEW: SYLLABUS LOADER ---
+def load_syllabus():
+    try:
+        records = syllabus_sheet.get_all_records()
+        curriculum = {}
+        for row in records:
+            course = str(row.get("Course", "")).strip()
+            topic = str(row.get("Topic", "")).strip()
+            if course and topic:
+                if course not in curriculum:
+                    curriculum[course] = []
+                curriculum[course].append(topic)
+        return curriculum
+    except Exception:
+        return {"General Study": ["General Topic"]} # Safety fallback
 
 def load_data():
     db = {}
