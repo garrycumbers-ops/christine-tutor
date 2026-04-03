@@ -128,10 +128,11 @@ def get_system_instruction(age, subject, history_summary):
     USER PROFILE:
     Age: {age}
     Current Topic: {subject}
-    Past Context: {history_summary}
+    Past Context (Bookmark & Gaps): {history_summary}
 
     CURRICULUM GOAL:
-    You must PROACTIVELY guide the student through the "Current Topic" listed above. Do not wait for them to decide what to learn. Greet them, review their past context, and immediately introduce the first core concept of their Current Topic. 
+    You must PROACTIVELY guide the student through the "Current Topic". 
+    CRITICAL RULE: Read the "Past Context" to see what they have already mastered. NEVER re-teach mastered concepts. Pick up exactly where the "Bookmark" leaves off and introduce the NEXT logical concept. 
 
     CORE GUIDELINES:
     1. **Strict Brevity & Slow Processing:** Responses must be extremely concise. Chunk complex ideas. Use short bullet points. NEVER output walls of text. Keep your total response as short as possible.
