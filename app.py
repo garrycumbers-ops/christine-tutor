@@ -228,7 +228,19 @@ if username and api_key:
     else:
         # --- SIDEBAR TOOLS ---
         st.sidebar.title(f"👤 {username}'s Space")
-        current_subject = st.sidebar.text_input("Current Subject", value="General Study")
+        
+        # --- THE CURRICULUM ROADMAP ---
+        st.sidebar.caption("🗺️ Your Learning Map")
+        syllabus_data = load_syllabus()
+        course_list = list(syllabus_data.keys())
+        
+        # Smart dropdowns that read from Google Sheets
+        selected_course = st.sidebar.selectbox("Course:", course_list)
+        selected_topic = st.sidebar.selectbox("Current Topic:", syllabus_data.get(selected_course, ["General"]))
+        
+        # Combine them so Christine knows exactly what to teach!
+        current_subject = f"{selected_course}: {selected_topic}"
+
         st.sidebar.markdown("---")
         
         # Add the voice toggle right here!
