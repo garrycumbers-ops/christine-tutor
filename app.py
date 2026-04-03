@@ -496,21 +496,21 @@ if username and api_key:
                         try:
                             recent_chat = str(user_data["history"][-8:]) 
                             memory_prompt = f"""
-                            You are an expert teacher maintaining a highly compressed, long-term dossier on a student's KNOWLEDGE GAPS.
+                            You are an expert teacher maintaining a highly compressed, long-term dossier on a student.
                             
-                            CURRENT DOSSIER (Active Gaps): 
+                            CURRENT DOSSIER: 
                             {user_data['summary']}
                             
                             RECENT CHAT: 
                             {recent_chat}
                             
-                            TASK: Update the dossier strictly focusing on what the student DOES NOT know.
+                            TASK: Update the dossier to track their progress. 
                             
                             CRITICAL RULES FOR SPACE SAVING:
-                            1. RECORD ONLY GAPS: Only log weaknesses, misunderstandings, and specific topics that need review. Do NOT record what the student already knows or got right.
-                            2. PRUNE RESOLVED ISSUES: If the recent chat shows the student has mastered a past weakness, DELETE that weakness from the dossier completely. 
-                            3. ORGANIZE: Use Subject headings (e.g., "🧬 SCIENCE:"). Under each, keep short, punchy bullet points of active gaps.
-                            4. BE RUTHLESS: Keep the entire dossier as short as possible. If they know it, drop it from the notes.
+                            1. THE BOOKMARK: Write one short sentence at the top stating exactly what they just finished mastering so the tutor knows where to start next time (e.g., "BOOKMARK: Mastered Cell Walls, ready for Mitochondria").
+                            2. RECORD GAPS: Log specific weaknesses or misunderstandings as bullet points. 
+                            3. PRUNE RESOLVED ISSUES: If the recent chat shows they mastered a past weakness, DELETE it from the dossier.
+                            4. BE RUTHLESS: Keep the entire dossier under 100 words.
                             """
                             
                             # Fallback Logic
