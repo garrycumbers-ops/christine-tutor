@@ -207,11 +207,16 @@ if username and api_key:
                 st.session_state.user_data = {"age": None, "history": [], "summary": "New student."}
             else:
                 st.session_state.user_data = db[username]
-                # THE CLEAN SLATE & GREETING: Clear the old log, but inject a new greeting!
-                # We use .title() so if the database says "john", it prints as "John"
+                
+                # Grab what they were studying last, or use a default if it's blank
+                saved_topic = db[username].get("last_topic", "a new topic")
+                if saved_topic == "":
+                    saved_topic = "a new topic"
+                
+                # THE CLEAN SLATE & GREETING
                 st.session_state.user_data["history"] = [{
                     "role": "model", 
-                    "content": f"Welcome back, {username.title()}! I've reviewed my notes from last time. What subject are we tackling today?"
+                    "content": f"Welcome back, {username.title()}! I've reviewed my notes, and it looks like we were working on **{saved_topic}**. Are you ready to pick up exactly where we left off, or do you want to switch topics?"
                 }]
             st.session_state.current_user = username
 
