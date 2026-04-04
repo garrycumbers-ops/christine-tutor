@@ -101,14 +101,16 @@ def save_current_student(name, data):
     hist_str = json.dumps(recent_history)
     
     age = data.get("age", "") 
+    last_topic = data.get("last_topic", "") # Grab the topic to save
     
     try:
         cell = sheet.find(name, in_column=1)
         sheet.update_cell(cell.row, 2, summary)
         sheet.update_cell(cell.row, 3, hist_str)
         sheet.update_cell(cell.row, 4, age)
+        sheet.update_cell(cell.row, 5, last_topic) # Save to Column E
     except Exception:
-        sheet.append_row([name, summary, hist_str, age])
+        sheet.append_row([name, summary, hist_str, age, last_topic])
 
 # ----------------------------------
 
