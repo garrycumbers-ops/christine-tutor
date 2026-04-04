@@ -53,15 +53,16 @@ def load_data():
         
         # Skip the first row (the headers) and read the data
         for row in rows[1:]:
-            # Safety net: ensure the row has exactly 4 columns
-            while len(row) < 4:
+            # Safety net: ensure the row has exactly 5 columns now!
+            while len(row) < 5:
                 row.append("")
                 
-            # Grab strictly by Column Number (0=A, 1=B, 2=C, 3=D)
+            # Grab strictly by Column Number (0=A, 1=B, 2=C, 3=D, 4=E)
             name_col = str(row[0]).strip().lower()
             summary_col = str(row[1]).strip()
             history_col = str(row[2]).strip()
             age_col = str(row[3]).strip()
+            topic_col = str(row[4]).strip() # The new column!
             
             if name_col and name_col not in db:
                 try:
@@ -74,9 +75,14 @@ def load_data():
                 else:
                     student_age = age_col
                 
-                # Load the dossier into memory!
-                db[name_col] = {"summary": summary_col, "history": hist, "age": student_age}
-                
+                # Load the dossier AND the last topic into memory!
+                db[name_col] = {
+                    "summary": summary_col, 
+                    "history": hist, 
+                    "age": student_age, 
+                    "last_topic": topic_col
+                }
+       
         return db
         
     except Exception as e:
