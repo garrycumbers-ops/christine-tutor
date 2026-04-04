@@ -249,12 +249,31 @@ if username and api_key:
         syllabus_data = load_syllabus()
         course_list = list(syllabus_data.keys())
         
-        # Smart dropdowns that read from Google Sheets
-        selected_course = st.sidebar.selectbox("Course:", course_list)
-        selected_topic = st.sidebar.selectbox("Current Topic:", syllabus_data.get(selected_course, ["General"]))
+        # 1. Figure out what they were studying last time
+        saved_course_topic = user_data.get("last_topic", "")
+        if ":" in saved_course_topic:
+            default_course, default_topic = saved_course_topic.split(":", 1)
+            default_course = default_course.strip()
+            default_topic = default_topic.strip()
+        else:
+            default_course = course_list[0] if course_list else ""
+            default_topic = ""
+
+        # 2. Find the index numbers so the dropdowns snap to the right place
+        course_index = course_list.index(default_course) if default_course in course_list else 0
+        selected_course = st.sidebar.selectbox("Course:", course_list, index=course_index)
+
+        topic_list = syllabus_data.get(selected_course, ["General Topic"])
+        topic_index = topic_list.index(default_topic) if default_topic in topic_list else 0
+        selected_topic = st.sidebar.selectbox("Current Topic:", topic_list, index=topic_index)
         
-        # Combine them so Christine knows exactly what to teach!
+        # 3. Combine them and save it as the active subject
         current_subject = f"{selected_course}: {selected_topic}"
+
+        # 4. If they changed the dropdown, update their memory file instantly!
+        if current_subject != user_data.get("last_topic"):
+            user_data["last_topic"] = current_subject
+            save_current_student(username, user_data)
 
         st.sidebar.markdown("---")
         
