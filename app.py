@@ -251,47 +251,6 @@ if username and api_key:
         st.sidebar.header("🧠 Christine's Notes")
         st.sidebar.caption("Current Focus:")
         st.sidebar.info(user_data["summary"])
-        
-        if st.sidebar.button("📝 Analyze Session & Update Profile"):
-            with st.spinner("Christine is analyzing your progress..."):
-                try:
-                    recent_chat = str(user_data["history"][-10:]) 
-                    memory_prompt = f"""
-                    You are an expert teacher maintaining a permanent, long-term dossier on a student.
-                    
-                    CURRENT MASTER DOSSIER (Do not lose this information!): 
-                    {user_data['summary']}
-                    
-                    RECENT CHAT (New Info to integrate): 
-                    {recent_chat}
-                    
-                    TASK: Update the Master Dossier with the new insights. 
-                    
-                    CRITICAL RULES:
-                    1. NEVER delete information about previous subjects. You are building a permanent record.
-                    2. Organize your notes using clear Subject headings (e.g., "🧬 SCIENCE:", "📐 MATH:").
-                    3. Under each subject, keep short bullet points of their weaknesses, what they just learned, and what to review next time.
-                    4. If the recent chat is about a brand new subject, create a new heading for it at the bottom.
-                    5. Keep the total output concise and strictly focused on academic progress.
-                    """
-                    
-                    # Smart Fallback logic (just like the main chat!)
-                    try:
-                        analyzer = genai.GenerativeModel(model_name=PRIMARY_MODEL)
-                        memory_response = analyzer.generate_content(memory_prompt)
-                    except Exception:
-                        analyzer = genai.GenerativeModel(model_name=FALLBACK_MODEL)
-                        memory_response = analyzer.generate_content(memory_prompt)
-                    
-                    user_data["summary"] = memory_response.text.strip()
-                    
-                    # ---> SAVE TO GOOGLE SHEETS <---
-                    save_current_student(username, user_data)
-                    st.rerun()
-                    
-                except Exception as e:
-                    # Print the EXACT error so we know what's wrong!
-                    st.sidebar.error(f"Error: {e}")
 
         st.sidebar.markdown("---")
         
