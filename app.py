@@ -420,6 +420,8 @@ if username and api_key:
 
             # --- Clean UI Display for the Student ---
             with st.chat_message("user"):
+                if auto_topic:
+                    st.markdown(f"*(Switched topic to {auto_topic})*")
                 if user_text:
                     st.markdown(user_text)
                 if active_image and pil_image:
