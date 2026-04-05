@@ -378,11 +378,19 @@ if username and api_key:
             is_new_image = True
 
         # TRIGGER
-        if user_text or (is_new_image and active_image) or user_audio:
+        # Check if the dropdown was just changed
+        auto_topic = st.session_state.pop("auto_submit_topic", None)
+        
+        if user_text or (is_new_image and active_image) or user_audio or auto_topic:
             
             display_text = user_text if user_text else ""
             current_turn_content = []
             
+            # --- NEW: Automated Topic Switch Prompt ---
+            if auto_topic:
+                display_text = f"I am switching topics to **{auto_topic}**. Please check my dossier and test me on the next concept I need to learn."
+                current_turn_content.append(display_text)
+                
             if user_text: 
                 current_turn_content.append(user_text)
 
