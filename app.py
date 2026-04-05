@@ -448,7 +448,7 @@ if username and api_key:
                                 response = model.generate_content(prompt_parts)
                             else:
                                 chat = model.start_chat(history=chat_history)
-                                response = chat.send_message(user_text)
+                                response = chat.send_message(display_text) # <-- FIXED HERE
                         except Exception:
                             # Try Fallback Model
                             model = genai.GenerativeModel(model_name=FALLBACK_MODEL, system_instruction=system_instruction)
@@ -457,8 +457,8 @@ if username and api_key:
                                 response = model.generate_content(prompt_parts)
                             else:
                                 chat = model.start_chat(history=chat_history)
-                                response = chat.send_message(user_text)
-                        
+                                response = chat.send_message(display_text) # <-- FIXED HERE
+                    
                         answer = response.text
                         
                         # --- CLEANUP: Stop the AI from mimicking the mic label ---
