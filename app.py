@@ -269,11 +269,18 @@ if username and api_key:
         
         # 3. Combine them and save it as the active subject
         current_subject = f"{selected_course}: {selected_topic}"
-
         # 4. If they changed the dropdown, update their memory file instantly!
         if current_subject != user_data.get("last_topic"):
+            # Don't trigger on their very first login, only on active switches
+            is_active_switch = user_data.get("last_topic") != ""
+            
             user_data["last_topic"] = current_subject
             save_current_student(username, user_data)
+            
+            # Set a flag to force Christine to speak!
+            if is_active_switch:
+                st.session_state.auto_submit_topic = current_subject
+                st.rerun()
 
         st.sidebar.markdown("---")
         
