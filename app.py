@@ -525,8 +525,9 @@ if username and api_key:
                                 # THE FIX: Rewind the virtual tape back to 0 seconds!
                                 sound_file.seek(0)
                                 
-                                # SAVE TO MEMORY INSTEAD OF PLAYING IMMEDIATELY
-                                st.session_state.autoplay_audio = sound_file.read()
+                                # PLAY IMMEDIATELY (Browser security allows this here!)
+                                st.audio(sound_file, format='audio/mpeg', autoplay=True)
+                                
                             except Exception as e:
                                 st.error(f"Audio generation skipped: {e}")
                         # --- NEW AUDIO BLOCK END ---
@@ -535,16 +536,14 @@ if username and api_key:
                         if st.session_state.captured_image:
                             st.session_state.captured_image = None
                 
-                                user_data["history"].append({"role": "model", "content": answer})
+                # Save the new message to history
+                user_data["history"].append({"role": "model", "content": answer})
                 
                 # 1. SAVE CHAT IMMEDIATELY 
                 save_current_student(username, user_data)
                 
                 # 2. UPDATE COUNTER
                 st.session_state.unsummarized_messages += 2
-                
-                # 3. INSTANT REBOOT (Flushes UI and frees the microphone instantly!)
-                st.rerun()
 
             except Exception as e:
                  st.error(f"Connection Error: {e}")
