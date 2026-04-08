@@ -372,11 +372,6 @@ if username and api_key:
             with st.chat_message(role_display):
                 st.markdown(msg["content"])
 
-        # --- AUTOPLAY AUDIO ---
-        if st.session_state.get("autoplay_audio"):
-            st.audio(st.session_state.autoplay_audio, format='audio/mpeg', autoplay=True)
-            st.session_state.autoplay_audio = None  # Clear it so it only plays once!
-
         # --- INPUT & PROCESSING ---
         
         # Inject CSS to float the microphone at the bottom
