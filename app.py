@@ -358,9 +358,13 @@ if username and api_key:
             </style>
             """, unsafe_allow_html=True)
 
-        user_audio = st.audio_input("🎤 Talk to Christine")
+        # --- THE DYNAMIC KEY TRICK ---
+        # By adding the length of the chat history to the key, Streamlit is forced
+        # to build a brand new, un-stuck microphone widget after every single turn!
+        mic_key = f"audio_{len(user_data['history'])}"
+        
+        user_audio = st.audio_input("🎤 Talk to Christine", key=mic_key)
         user_text = st.chat_input("...or type your question here")
-
 
         # Determine if we have an image to process
         active_image = None
