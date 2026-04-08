@@ -540,60 +540,16 @@ if username and api_key:
                         if st.session_state.captured_image:
                             st.session_state.captured_image = None
                 
-                user_data["history"].append({"role": "model", "content": answer})
+                                user_data["history"].append({"role": "model", "content": answer})
                 
-                # 1. SAVE CHAT IMMEDIATELY (Protects against fast clicking!)
+                # 1. SAVE CHAT IMMEDIATELY 
                 save_current_student(username, user_data)
                 
-                # Add 2 to the counter (1 user prompt + 1 AI response)
+                # 2. UPDATE COUNTER
                 st.session_state.unsummarized_messages += 2
                 
-                # --- SILENT AUTO-DOSSIER ENGINE ---
-                # Trigger if we hit OR exceed the 8 message limit!
-                if st.session_state.unsummarized_messages >= 8:
-                    with st.spinner("Christine is taking notes on your progress..."):
-                        try:
-                            # Dynamically grab the exact number of unsummarized messages
-                            grab_count = st.session_state.unsummarized_messages
-                            recent_chat = str(user_data["history"][-grab_count:]) 
-                            
-                            memory_prompt = f"""
-                            You are an expert teacher maintaining a highly compressed, long-term dossier on a student.
-                            
-                            CURRENT DOSSIER: 
-                            {user_data['summary']}
-                            
-                            RECENT CHAT: 
-                            {recent_chat}
-                            
-                            TASK: Update the dossier to track their progress. 
-                            
-                            CRITICAL RULES FOR SPACE SAVING:
-                            1. THE BOOKMARK: Write one short sentence at the top stating exactly what they just finished mastering so the tutor knows where to start next time.
-                            2. RECORD GAPS (ACADEMIC ONLY): Log specific academic weaknesses as bullet points. Completely IGNORE off-topic questions, behavioral issues, or unrelated chatter.
-                            3. PRUNE RESOLVED ISSUES: If the recent chat shows they mastered a past weakness, DELETE it from the dossier.
-                            4. BE RUTHLESS: Keep the entire dossier under 100 words.
-                            """
-                            
-                            # Fallback Logic
-                            try:
-                                analyzer = genai.GenerativeModel(model_name=PRIMARY_MODEL)
-                                memory_response = analyzer.generate_content(memory_prompt)
-                            except Exception:
-                                analyzer = genai.GenerativeModel(model_name=FALLBACK_MODEL)
-                                memory_response = analyzer.generate_content(memory_prompt)
-                            
-                            user_data["summary"] = memory_response.text.strip()
-                            
-                            # THE MAGIC FIX: Only reset the counter if the update succeeds!
-                            st.session_state.unsummarized_messages = 0
-                            
-                            # 2. SAVE THE NEW DOSSIER TO GOOGLE SHEETS
-                            save_current_student(username, user_data)
-                            
-                        except Exception as e:
-                            st.warning(f"Dossier update skipped. Error: {e}")
-                            # If it fails, the counter stays at 8+ and will immediately try again on the next message!
+                # 3. INSTANT REBOOT (Flushes UI and frees the microphone instantly!)
+                st.rerun()
 
             except Exception as e:
                  st.error(f"Connection Error: {e}")
