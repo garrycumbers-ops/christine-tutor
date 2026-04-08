@@ -190,6 +190,8 @@ if "captured_image" not in st.session_state:
     st.session_state.captured_image = None
 if "last_processed_file_id" not in st.session_state:
     st.session_state.last_processed_file_id = None
+if "unsummarized_messages" not in st.session_state:
+    st.session_state.unsummarized_messages = 0
 
 # USER IDENTIFICATION
 raw_username = st.text_input("Please enter your first name to begin:", key="username_input")
