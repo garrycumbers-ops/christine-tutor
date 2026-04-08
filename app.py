@@ -336,11 +336,46 @@ if username and api_key:
                     st.session_state.camera_open = False # Turn off hardware
                     st.rerun()
 
+        # --- SILENT AUTO-DOSSIER ENGINE (MOVED UP FOR UI SAFETY) ---
+        if st.session_state.unsummarized_messages >= 8:
+            with st.spinner("Christine is organizing her notes..."):
+                try:
+                    grab_count = st.session_state.unsummarized_messages
+                    recent_chat = str(user_data["history"][-grab_count:]) 
+                    
+                    memory_prompt = f"""
+                    You are an expert teacher maintaining a highly compressed, long-term dossier on a student.
+                    CURRENT DOSSIER: {user_data['summary']}
+                    RECENT CHAT: {recent_chat}
+                    TASK: Update the dossier to track their progress. 
+                    CRITICAL RULES:
+                    1. THE BOOKMARK: Write one short sentence stating exactly what they just mastered.
+                    2. RECORD GAPS: Log specific weaknesses. IGNORE off-topic chatter.
+                    3. PRUNE: DELETE mastered weaknesses. Keep under 100 words.
+                    """
+                    try:
+                        analyzer = genai.GenerativeModel(model_name=PRIMARY_MODEL)
+                        memory_response = analyzer.generate_content(memory_prompt)
+                    except Exception:
+                        analyzer = genai.GenerativeModel(model_name=FALLBACK_MODEL)
+                        memory_response = analyzer.generate_content(memory_prompt)
+                    
+                    user_data["summary"] = memory_response.text.strip()
+                    st.session_state.unsummarized_messages = 0
+                    save_current_student(username, user_data)
+                except Exception as e:
+                    st.warning(f"Dossier update skipped. Error: {e}")
+
         # --- CHAT HISTORY ---
         for msg in user_data["history"]:
             role_display = "user" if msg["role"] == "user" else "assistant"
             with st.chat_message(role_display):
                 st.markdown(msg["content"])
+
+        # --- AUTOPLAY AUDIO ---
+        if st.session_state.get("autoplay_audio"):
+            st.audio(st.session_state.autoplay_audio, format='audio/mpeg', autoplay=True)
+            st.session_state.autoplay_audio = None  # Clear it so it only plays once!
 
         # --- INPUT & PROCESSING ---
         
