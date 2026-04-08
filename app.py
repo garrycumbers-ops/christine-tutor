@@ -530,8 +530,8 @@ if username and api_key:
                                 # THE FIX: Rewind the virtual tape back to 0 seconds!
                                 sound_file.seek(0)
                                 
-                                # THE APPLE FIX: Changed format from audio/mp3 to audio/mpeg
-                                st.audio(sound_file, format='audio/mpeg', autoplay=True)
+                                # SAVE TO MEMORY INSTEAD OF PLAYING IMMEDIATELY
+                                st.session_state.autoplay_audio = sound_file.read()
                             except Exception as e:
                                 st.error(f"Audio generation skipped: {e}")
                         # --- NEW AUDIO BLOCK END ---
