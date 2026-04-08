@@ -501,12 +501,21 @@ if username and api_key:
                 
                 user_data["history"].append({"role": "model", "content": answer})
                 
+                # 1. SAVE CHAT IMMEDIATELY (Protects against fast clicking!)
+                save_current_student(username, user_data)
+                
+                # Add 2 to the counter (1 user prompt + 1 AI response)
+                st.session_state.unsummarized_messages += 2
+                
                 # --- SILENT AUTO-DOSSIER ENGINE ---
-                # THE FIX: Catch lengths of 8, 9, 16, 17, etc., so the math never skips!
-                if len(user_data["history"]) in [8, 9, 16, 17, 24, 25]:
+                # Trigger if we hit OR exceed the 8 message limit!
+                if st.session_state.unsummarized_messages >= 8:
                     with st.spinner("Christine is taking notes on your progress..."):
                         try:
-                            recent_chat = str(user_data["history"][-8:]) 
+                            # Dynamically grab the exact number of unsummarized messages
+                            grab_count = st.session_state.unsummarized_messages
+                            recent_chat = str(user_data["history"][-grab_count:]) 
+                            
                             memory_prompt = f"""
                             You are an expert teacher maintaining a highly compressed, long-term dossier on a student.
                             
@@ -519,8 +528,8 @@ if username and api_key:
                             TASK: Update the dossier to track their progress. 
                             
                             CRITICAL RULES FOR SPACE SAVING:
-                            1. THE BOOKMARK: Write one short sentence at the top stating exactly what they just finished mastering so the tutor knows where to start next time (e.g., "BOOKMARK: Mastered Cell Walls, ready for Mitochondria").
-                            2. RECORD GAPS: Log specific weaknesses or misunderstandings as bullet points. 
+                            1. THE BOOKMARK: Write one short sentence at the top stating exactly what they just finished mastering so the tutor knows where to start next time.
+                            2. RECORD GAPS (ACADEMIC ONLY): Log specific academic weaknesses as bullet points. Completely IGNORE off-topic questions, behavioral issues, or unrelated chatter.
                             3. PRUNE RESOLVED ISSUES: If the recent chat shows they mastered a past weakness, DELETE it from the dossier.
                             4. BE RUTHLESS: Keep the entire dossier under 100 words.
                             """
@@ -535,16 +544,18 @@ if username and api_key:
                             
                             user_data["summary"] = memory_response.text.strip()
                             
+                            # THE MAGIC FIX: Only reset the counter if the update succeeds!
+                            st.session_state.unsummarized_messages = 0
+                            
+                            # 2. SAVE THE NEW DOSSIER TO GOOGLE SHEETS
+                            save_current_student(username, user_data)
+                            
                         except Exception as e:
-                            # THE FIX: Stop hiding errors! Show a small warning so we know if the API failed.
                             st.warning(f"Dossier update skipped. Error: {e}")
-
-                # Save everything (chat and new summary) to Google Sheets
-                save_current_student(username, user_data)
-
+                            # If it fails, the counter stays at 8+ and will immediately try again on the next message!
 
             except Exception as e:
-                st.error(f"Connection Error: {e}")
+                 st.error(f"Connection Error: {e}")
 
 elif not api_key:
      st.warning("Please configure your API Key.")
