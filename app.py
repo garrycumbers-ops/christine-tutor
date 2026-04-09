@@ -354,7 +354,7 @@ if username and api_key:
                     3. PRUNE: DELETE mastered weaknesses. Keep under 100 words.
                     """
                     try:
-                        analyzer = genai.GenerativeModel(model_name=PRIMARY_MODEL)
+                        analyzer = genai.GenerativeModel(model_name="gemini-1.5-flash-8b")
                         memory_response = analyzer.generate_content(memory_prompt)
                     except Exception:
                         analyzer = genai.GenerativeModel(model_name=FALLBACK_MODEL)
