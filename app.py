@@ -434,10 +434,59 @@ if username and api_key:
             if user_audio:
                 audio_part = {
                     "mime_type": "audio/wav",
+           # Determine if we have an image to process
+        active_image = None
+        is_new_image = False
+        
+        # Priority: Camera State > File Upload
+        if st.session_state.captured_image:
+            active_image = st.session_state.captured_image
+            file_id = f"cam-{str(active_image.size)}"
+        elif file_input:
+            active_image = file_input
+            file_id = f"file-{file_input.name}-{file_input.size}"
+        else:
+            file_id = None
+
+        if file_id and file_id != st.session_state.last_processed_file_id:
+            is_new_image = True
+
+        # --- NEW: Anti-Repeat Audio Tracker ---
+        is_new_audio = False
+        audio_id = None
+        if user_audio:
+            audio_id = f"audio-{user_audio.size}"
+            if audio_id != st.session_state.last_processed_audio_id:
+                is_new_audio = True
+
+        # TRIGGER
+        # Check if the dropdown was just changed
+        auto_topic = st.session_state.pop("auto_submit_topic", None)
+        
+        # We only trigger if it's explicitly NEW audio
+        if user_text or (is_new_image and active_image) or (is_new_audio and user_audio) or auto_topic:
+            
+            display_text = user_text if user_text else ""
+            current_turn_content = []
+            
+            # --- NEW: Automated Topic Switch Prompt ---
+            if auto_topic:
+                display_text = f"I am switching topics to **{auto_topic}**. Please check my dossier and test me on the next concept I need to learn."
+                current_turn_content.append(display_text)
+                
+            if user_text: 
+                current_turn_content.append(user_text)
+
+            # --- Process Audio ---
+            if is_new_audio and user_audio:
+                audio_part = {
+                    "mime_type": "audio/wav",
                     "data": user_audio.getvalue()
                 }
                 current_turn_content.append(audio_part)
                 display_text += "\n\n[🎤 Voice Message]"
+                # Mark it as processed so it never repeats!
+                st.session_state.last_processed_audio_id = audio_id
             
             # --- Process Image ---
             pil_image = None
@@ -462,9 +511,9 @@ if username and api_key:
                     st.markdown(user_text)
                 if active_image and pil_image:
                     st.image(pil_image, caption="Work for Review")
-                if user_audio:
+                if is_new_audio and user_audio:
                     st.audio(user_audio) # Shows an audio player so they know it sent!
-
+            
             user_data["history"].append({"role": "user", "content": display_text})
 
             # --- AI GENERATION ---
