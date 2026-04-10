@@ -194,6 +194,8 @@ if "unsummarized_messages" not in st.session_state:
     st.session_state.unsummarized_messages = 0
 if "autoplay_audio" not in st.session_state:
     st.session_state.autoplay_audio = None
+if "last_processed_audio_id" not in st.session_state:
+    st.session_state.last_processed_audio_id = None
     
 # USER IDENTIFICATION
 raw_username = st.text_input("Please enter your first name to begin:", key="username_input")
