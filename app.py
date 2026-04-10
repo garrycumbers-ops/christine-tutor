@@ -542,6 +542,61 @@ if username and api_key:
                 
                 # LOCK IT SO IT NEVER REPEATS
                 st.session_state.last_processed_audio_id = audio_id
+                    # Determine if we have an image to process
+        active_image = None
+        is_new_image = False
+        
+        # Priority: Camera State > File Upload
+        if st.session_state.captured_image:
+            active_image = st.session_state.captured_image
+            file_id = f"cam-{str(active_image.size)}"
+        elif file_input:
+            active_image = file_input
+            file_id = f"file-{file_input.name}-{file_input.size}"
+        else:
+            file_id = None
+
+        if file_id and file_id != st.session_state.last_processed_file_id:
+            is_new_image = True
+
+        # --- STRICT AUDIO TRACKER ---
+        is_new_audio = False
+        audio_id = None
+        if user_audio:
+            audio_id = f"audio-{user_audio.size}"
+            if audio_id != st.session_state.last_processed_audio_id:
+                is_new_audio = True
+
+        # TRIGGER
+        auto_topic = st.session_state.pop("auto_submit_topic", None)
+        
+        # THE FIX: Strict boolean locks prevent the toggle from creating "ghost" responses!
+        has_text = bool(user_text)
+        has_image = bool(is_new_image and active_image)
+        has_audio = bool(is_new_audio and user_audio)
+        
+        if has_text or has_image or has_audio or auto_topic:
+            
+            display_text = user_text if user_text else ""
+            current_turn_content = []
+            
+            if auto_topic:
+                display_text = f"I am switching topics to **{auto_topic}**. Please check my dossier and test me on the next concept I need to learn."
+                current_turn_content.append(display_text)
+                
+            if has_text: 
+                current_turn_content.append(user_text)
+
+            if has_audio:
+                audio_part = {
+                    "mime_type": "audio/wav",
+                    "data": user_audio.getvalue()
+                }
+                current_turn_content.append(audio_part)
+                display_text += "\n\n[🎤 Voice Message]"
+                
+                # LOCK IT SO IT NEVER REPEATS
+                st.session_state.last_processed_audio_id = audio_id
             
             pil_image = None
             if has_image:
