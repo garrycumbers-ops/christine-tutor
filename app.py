@@ -390,7 +390,7 @@ if username and api_key:
                             model = genai.GenerativeModel(
                                 model_name=PRIMARY_MODEL, 
                                 system_instruction=system_instruction,
-                                generation_config=genai.types.GenerationConfig(max_output_tokens=300)
+                                generation_config=genai.types.GenerationConfig(max_output_tokens=800)
                             )
                             if has_image or has_audio:
                                 prompt_parts = [system_instruction] + [msg['parts'][0] for msg in chat_history] + current_turn_content
@@ -402,7 +402,7 @@ if username and api_key:
                             model = genai.GenerativeModel(
                                 model_name=FALLBACK_MODEL, 
                                 system_instruction=system_instruction,
-                                generation_config=genai.types.GenerationConfig(max_output_tokens=300)
+                                generation_config=genai.types.GenerationConfig(max_output_tokens=800)
                             )
                             if has_image or has_audio:
                                 prompt_parts = [system_instruction] + [msg['parts'][0] for msg in chat_history] + current_turn_content
