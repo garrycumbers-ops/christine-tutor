@@ -389,8 +389,7 @@ if username and api_key:
                         try:
                             model = genai.GenerativeModel(
                                 model_name=PRIMARY_MODEL, 
-                                system_instruction=system_instruction,
-                                generation_config=genai.types.GenerationConfig(max_output_tokens=800)
+                                system_instruction=system_instruction
                             )
                             if has_image or has_audio:
                                 prompt_parts = [system_instruction] + [msg['parts'][0] for msg in chat_history] + current_turn_content
@@ -401,8 +400,7 @@ if username and api_key:
                         except Exception:
                             model = genai.GenerativeModel(
                                 model_name=FALLBACK_MODEL, 
-                                system_instruction=system_instruction,
-                                generation_config=genai.types.GenerationConfig(max_output_tokens=800)
+                                system_instruction=system_instruction
                             )
                             if has_image or has_audio:
                                 prompt_parts = [system_instruction] + [msg['parts'][0] for msg in chat_history] + current_turn_content
