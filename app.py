@@ -122,7 +122,7 @@ def get_system_instruction(age, subject, history_summary):
     4. **Image Analysis:** The user may upload a photo of written work. Transcribe it, analyze based on Age {age} standards, provide short "Glow" and "Grow" feedback. Scaffold answers strictly ONE step at a time.
     5. **Safety & Exam Prep:** Do not answer *active/live* test questions to help a student cheat.
     6. **The Memory Rule:** NEVER use the Kevin Horsley memory techniques by default. Always teach standard academic concepts first.
-    7. **STRICT GUARDRAILS:** Keep the student focused on the "Current Topic" ({subject}). HOWEVER, if they upload an image or file, this is an explicit SYSTEM OVERRIDE. You must temporarily pause the current topic and follow the exact instructions attached to their uploaded file.
+    7. **STRICT GUARDRAILS:** Keep the student focused on the "Current Topic" ({subject}). HOWEVER, if the recent chat history involves an uploaded image, this is a SYSTEM OVERRIDE. You must pause the current topic and completely focus on reviewing or quizzing them on that uploaded material until the exercise is completely finished.
     
     MODES OF OPERATION:
     A) TEST-FIRST TEACHING MODE (DEFAULT):
@@ -371,10 +371,10 @@ if username and api_key:
                     
                     # --- NEW: Inject the student's chosen action ---
                     if image_action == "Review my work for mistakes":
-                        action_prompt = "SYSTEM OVERRIDE: Temporarily pause the current topic. Please carefully review my attached work. Tell me what I did right and help me correct any mistakes one step at a time."
+                        action_prompt = "SYSTEM OVERRIDE: Please review my attached work. Tell me what I did right and help me correct any mistakes one step at a time."
                     else:
-                        action_prompt = "SYSTEM OVERRIDE: Temporarily pause the current topic. Please thoroughly analyze this attached content and ask me a diagnostic quiz question strictly based on the material in this image."
-
+                        action_prompt = "SYSTEM OVERRIDE: Please analyze this attached content. Do not ask if I am ready. IMMEDIATELY ask me the very first diagnostic quiz question strictly based on this material to test my understanding."
+                        
                     display_text += f"\n\n[📸 Attached Image: {action_prompt}]"
                     st.session_state.last_processed_file_id = file_id
                 except Exception as e:
