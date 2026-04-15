@@ -238,6 +238,14 @@ if username and api_key:
         st.sidebar.markdown("---")
         
         st.sidebar.header("📸 Submit Work")
+        
+        # --- NEW: Image Action Selector ---
+        image_action = st.sidebar.radio(
+            "Step 1: What should Christine do?",
+            ["Review my work for mistakes", "Quiz me on this content"]
+        )
+        st.sidebar.caption("Step 2: Upload or snap your photo:")
+        
         file_input = st.sidebar.file_uploader("Upload File", type=['png', 'jpg', 'jpeg', 'webp'])
         st.sidebar.write("OR")
         
