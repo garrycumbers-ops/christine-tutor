@@ -371,10 +371,10 @@ if username and api_key:
                     
                     # --- NEW: Inject the student's chosen action ---
                     if image_action == "Review my work for mistakes":
-                        action_prompt = "Please review my attached work. Tell me what I did right and help me correct any mistakes one step at a time."
+                        action_prompt = "SYSTEM OVERRIDE: Temporarily pause the current topic. Please carefully review my attached work. Tell me what I did right and help me correct any mistakes one step at a time."
                     else:
-                        action_prompt = "Please analyze this attached content and ask me a diagnostic quiz question to test my understanding of it."
-                        
+                        action_prompt = "SYSTEM OVERRIDE: Temporarily pause the current topic. Please thoroughly analyze this attached content and ask me a diagnostic quiz question strictly based on the material in this image."
+
                     display_text += f"\n\n[📸 Attached Image: {action_prompt}]"
                     st.session_state.last_processed_file_id = file_id
                 except Exception as e:
