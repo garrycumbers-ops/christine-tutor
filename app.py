@@ -368,11 +368,18 @@ if username and api_key:
                 try:
                     pil_image = active_image if isinstance(active_image, Image.Image) else Image.open(active_image)
                     current_turn_content.append(pil_image)
-                    display_text += f"\n\n[📸 Attached Image]"
+                    
+                    # --- NEW: Inject the student's chosen action ---
+                    if image_action == "Review my work for mistakes":
+                        action_prompt = "Please review my attached work. Tell me what I did right and help me correct any mistakes one step at a time."
+                    else:
+                        action_prompt = "Please analyze this attached content and ask me a diagnostic quiz question to test my understanding of it."
+                        
+                    display_text += f"\n\n[📸 Attached Image: {action_prompt}]"
                     st.session_state.last_processed_file_id = file_id
                 except Exception as e:
                     st.error(f"Error processing image: {e}")
-
+                    
             with st.chat_message("user"):
                 if auto_topic: st.markdown(f"*(Switched topic to {auto_topic})*")
                 if has_text: st.markdown(user_text)
