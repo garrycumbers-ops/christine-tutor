@@ -103,7 +103,7 @@ if not api_key:
 
 def get_system_instruction(age, subject, history_summary):
     return f"""
-    You are "Christine," an empathetic AI Educational Assistant and expert memory coach for students aged 11-18. 
+    You are "Christine," an empathetic AI Educational Assistant and expert memory coach for students aged 11-18.
     
     USER PROFILE:
     Age: {age}
@@ -111,7 +111,7 @@ def get_system_instruction(age, subject, history_summary):
     Past Context (Bookmark & Gaps): {history_summary}
 
     CURRICULUM GOAL:
-    PROACTIVELY guide the student through the "Current Topic". 
+    PROACTIVELY guide the student through the "Current Topic".
     CRITICAL RULE: Read "Past Context" to see what they mastered. NEVER re-teach mastered concepts. Pick up exactly where the "Bookmark" leaves off and determine the NEXT logical concept.
     TEST-FIRST APPROACH: Do not just explain the next concept. You must test their knowledge on it FIRST before teaching.
 
@@ -122,8 +122,9 @@ def get_system_instruction(age, subject, history_summary):
     4. **Image Analysis:** The user may upload a photo of written work. Transcribe it, analyze based on Age {age} standards, provide short "Glow" and "Grow" feedback. Scaffold answers strictly ONE step at a time.
     5. **Safety & Exam Prep:** Do not answer *active/live* test questions to help a student cheat.
     6. **The Memory Rule:** NEVER use the Kevin Horsley memory techniques by default. Always teach standard academic concepts first.
-    7. **STRICT GUARDRAILS:** Keep the student focused on the "Current Topic" ({subject}). HOWEVER, if the recent chat history involves an uploaded image, this is a SYSTEM OVERRIDE. You must pause the current topic and completely focus on reviewing or quizzing them on that uploaded material until the exercise is completely finished.
-    
+    7. **STRICT GUARDRAILS:** Keep the student focused on the "Current Topic" ({subject}). HOWEVER, if the recent chat history involves an uploaded image or file, this is a SYSTEM OVERRIDE. You must pause the current topic and completely focus on reviewing or quizzing them on that uploaded material until the exercise is completely finished.
+    8. **ENGLISH & LITERATURE ANALYSIS:** If the student uploads a text or reading assignment, act as a Socratic English teacher. Focus on extracting meaning, analyzing connotations, exploring literary devices (imagery, metaphors, personification), and improving their vocabulary. NEVER write analytical paragraphs (like PEE/PEEL) for them; scaffold their writing strictly one sentence at a time.
+
     MODES OF OPERATION:
     A) TEST-FIRST TEACHING MODE (DEFAULT):
     1. Ask ONE short, diagnostic question about the next concept.
@@ -242,11 +243,16 @@ if username and api_key:
         # --- NEW: Image Action Selector ---
         image_action = st.sidebar.radio(
             "Step 1: What should Christine do?",
-            ["Review my work for mistakes", "Quiz me on this content"]
+            [
+                "Review my work for mistakes", 
+                "Quiz me on this content",
+                "Guide me through this English text"
+            ]
         )
-        st.sidebar.caption("Step 2: Upload or snap your photo:")
+        st.sidebar.caption("Step 2: Upload or snap your photo/document:")
         
-        file_input = st.sidebar.file_uploader("Upload File", type=['png', 'jpg', 'jpeg', 'webp'])
+        # Added 'pdf' support!
+        file_input = st.sidebar.file_uploader("Upload File", type=['png', 'jpg', 'jpeg', 'webp', 'pdf'])
         st.sidebar.write("OR")
         
         if st.session_state.captured_image:
@@ -364,26 +370,42 @@ if username and api_key:
                 st.session_state.last_processed_audio_id = audio_id
             
             pil_image = None
+            pdf_part = None
             if has_image:
                 try:
-                    pil_image = active_image if isinstance(active_image, Image.Image) else Image.open(active_image)
-                    current_turn_content.append(pil_image)
+                    # --- CHECK IF IT IS A PDF OR A PICTURE ---
+                    if not isinstance(active_image, Image.Image) and active_image.name.lower().endswith('.pdf'):
+                        # It's a PDF! Bundle it natively for Gemini
+                        pdf_part = {"mime_type": "application/pdf", "data": active_image.getvalue()}
+                        current_turn_content.append(pdf_part)
+                    else:
+                        # It's a picture! Process it normally
+                        pil_image = active_image if isinstance(active_image, Image.Image) else Image.open(active_image)
+                        current_turn_content.append(pil_image)
                     
-                    # --- NEW: Inject the student's chosen action ---
+                    # --- THE SYSTEM OVERRIDE ---
                     if image_action == "Review my work for mistakes":
                         action_prompt = "SYSTEM OVERRIDE: Please review my attached work. Tell me what I did right and help me correct any mistakes one step at a time."
-                    else:
+                    elif image_action == "Quiz me on this content":
                         action_prompt = "SYSTEM OVERRIDE: Please analyze this attached content. Do not ask if I am ready. IMMEDIATELY ask me the very first diagnostic quiz question strictly based on this material to test my understanding."
+                    else:
+                        # THE NEW ENGLISH OVERRIDE
+                        action_prompt = "SYSTEM OVERRIDE: Please analyze the attached English/Literature material. Guide me through it step-by-step to improve my vocabulary, grammar, and cognitive understanding of the text. Do not give me the answers. Ask me one thought-provoking question at a time about literary devices, connotations, or characterisation based on this specific text."
                         
-                    display_text += f"\n\n[📸 Attached Image: {action_prompt}]"
+                    file_label = "📄 Attached PDF" if pdf_part else "📸 Attached Image"
+                    display_text += f"\n\n[{file_label}: {action_prompt}]"
                     st.session_state.last_processed_file_id = file_id
                 except Exception as e:
-                    st.error(f"Error processing image: {e}")
+                    st.error(f"Error processing file: {e}")
                     
             with st.chat_message("user"):
                 if auto_topic: st.markdown(f"*(Switched topic to {auto_topic})*")
                 if has_text: st.markdown(user_text)
-                if has_image and pil_image: st.image(pil_image, caption="Work for Review")
+                if has_image:
+                    if pil_image:
+                        st.image(pil_image, caption="Work for Review")
+                    elif pdf_part:
+                        st.markdown(f"📄 **PDF Document Uploaded:** `{active_image.name}`")
                 if has_audio: st.audio(user_audio) 
             
             user_data["history"].append({"role": "user", "content": display_text})
