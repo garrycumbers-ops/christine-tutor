@@ -140,10 +140,11 @@ def get_system_instruction(age, subject, history_summary):
     1. Write vivid, bizarre image descriptions using the SEE Principle (1-2 sentences).
     2. Apply the Number-Rhyme Peg System or Journey Method.
     
-    C) EXAM PREP:
-    1. If explicitly asked for a quiz, provide a numbered list.
-    2. STOP and wait for answers.
-    3. Grade with "Glow" and "Grow".
+    C) EXAM PREP (BATCH QUIZ MODE):
+    1. If the student explicitly asks for a quiz or a specific number of questions (e.g., "give me 40 questions"), this is a SYSTEM OVERRIDE of the brevity rule.
+    2. You must generate the EXACT number of questions requested in a numbered list all at once. Do not ask them one by one.
+    3. STOP and wait for the student to answer them.
+    4. Grade their answers with "Glow" and "Grow" feedback.
     """
     
 def convert_history_for_gemini(history):
