@@ -71,7 +71,7 @@ def load_data():
                 }
         return db
     except Exception as e:
-        st.error(f" Database connection paused. Please refresh the page. (System code: {e})")
+        st.error(f"⚠️ Database connection paused. Please refresh the page. (System code: {e})")
         st.stop() 
 
 def save_current_student(name, data):
@@ -92,7 +92,7 @@ def save_current_student(name, data):
         sheet.append_row([name, summary, hist_str, age, last_topic])
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="Christine AI Tutor", page_icon="", layout="wide")
+st.set_page_config(page_title="Christine AI Tutor", page_icon="🎓", layout="wide")
 
 PRIMARY_MODEL = "gemini-2.0-flash"
 FALLBACK_MODEL = "gemini-2.5-flash"
@@ -165,7 +165,7 @@ def convert_history_for_gemini(history):
     return gemini_history
 
 # --- MAIN APP UI ---
-st.title(" Christine: AI Tutor")
+st.title("🎓 Christine: AI Tutor")
 
 # --- SESSION STATE SETUP ---
 if "camera_open" not in st.session_state: st.session_state.camera_open = False
@@ -211,9 +211,9 @@ if username and api_key:
             st.rerun()
     else:
         # --- SIDEBAR TOOLS ---
-        st.sidebar.title(f" {username}'s Space")
+        st.sidebar.title(f"👤 {username}'s Space")
         
-        st.sidebar.caption(" Your Learning Map")
+        st.sidebar.caption("🗺️ Your Learning Map")
         syllabus_data = load_syllabus()
         course_list = list(syllabus_data.keys())
         
@@ -248,25 +248,25 @@ if username and api_key:
                 st.rerun()
 
         st.sidebar.markdown("---")
-        voice_on = st.sidebar.toggle(" Read Christine's answers out loud")
+        voice_on = st.sidebar.toggle("🔊 Read Christine's answers out loud")
 
-        st.sidebar.header(" Christine's Notes")
+        st.sidebar.header("🧠 Christine's Notes")
         st.sidebar.info(user_data["summary"])
         
         # ---------------------------------------------------------
-        # --- NEW MASTERY PERCENTAGE TRACKER (COURSE SPECIFIC) ---
+        # --- NEW MASTERY PERCENTAGE TRACKER (TOPIC SPECIFIC) ---
         # ---------------------------------------------------------
         st.sidebar.divider()
-        st.sidebar.markdown(f"###  {selected_course} Brain Power")
+        st.sidebar.markdown(f"### 🏆 {selected_topic} Brain Power")
 
         dossier_text = user_data["summary"] if user_data.get("summary") else ""
 
-        # Make the course name safe for searching
-        safe_course = re.escape(selected_course)
+        # Make the TOPIC name safe for searching
+        safe_topic = re.escape(selected_topic)
 
-        # Search SPECIFICALLY for tags linked to the selected course from the dropdown
-        mastered_count = len(re.findall(rf'\[{safe_course}\]\s*mastered', dossier_text, re.IGNORECASE))
-        gap_count = len(re.findall(rf'\[{safe_course}\]\s*gap', dossier_text, re.IGNORECASE))
+        # Search SPECIFICALLY for tags linked to the selected topic from the dropdown
+        mastered_count = len(re.findall(rf'\[{safe_topic}\]\s*mastered', dossier_text, re.IGNORECASE))
+        gap_count = len(re.findall(rf'\[{safe_topic}\]\s*gap', dossier_text, re.IGNORECASE))
         total_tracked = mastered_count + gap_count
 
         if total_tracked > 0:
@@ -275,13 +275,13 @@ if username and api_key:
             mastery_percentage = 0
 
         st.sidebar.progress(mastery_percentage / 100.0)
-        st.sidebar.metric(label="Course Mastery", value=f"{mastery_percentage}%")
-        st.sidebar.caption(f"**{mastered_count}** Mastered | **{gap_count}** Gaps in {selected_course}")
+        st.sidebar.metric(label=f"Topic Mastery", value=f"{mastery_percentage}%")
+        st.sidebar.caption(f"**{mastered_count}** Mastered | **{gap_count}** Gaps in {selected_topic}")
         # ---------------------------------------------------------
         
         st.sidebar.markdown("---")
         
-        st.sidebar.header(" Submit Work")
+        st.sidebar.header("📸 Submit Work")
         
         # --- Image Action Selector ---
         image_action = st.sidebar.radio(
@@ -301,17 +301,17 @@ if username and api_key:
         
         if st.session_state.captured_image:
             st.sidebar.image(st.session_state.captured_image, caption="Ready to send", use_container_width=True)
-            if st.sidebar.button(" Discard & Retake"):
+            if st.sidebar.button("🗑️ Discard & Retake"):
                 st.session_state.captured_image = None
                 st.session_state.camera_open = True
                 st.rerun()
         else:
             if not st.session_state.camera_open:
-                if st.sidebar.button(" Open Camera"):
+                if st.sidebar.button("📸 Open Camera"):
                     st.session_state.camera_open = True
                     st.rerun()
             else:
-                if st.sidebar.button(" Close Camera"):
+                if st.sidebar.button("❌ Close Camera"):
                     st.session_state.camera_open = False
                     st.rerun()
                 cam_input = st.sidebar.camera_input("Take Photo")
@@ -331,10 +331,10 @@ if username and api_key:
                     You are an expert teacher maintaining a highly compressed, long-term dossier on a student.
                     CURRENT DOSSIER: {user_data['summary']}
                     RECENT CHAT: {recent_chat}
-                    TASK: Update the dossier to track their progress specifically for {selected_course}.
+                    TASK: Update the dossier to track their progress specifically for the topic: {selected_topic}.
                     CRITICAL RULES:
-                    1. MASTERED TAGS: You MUST start the line with the exact course tag [{selected_course}] followed by "MASTERED: " (e.g., [{selected_course}] MASTERED: The Human Skeleton).
-                    2. GAP TAGS: You MUST start the line with the exact course tag [{selected_course}] followed by "GAP: " (e.g., [{selected_course}] GAP: Balancing equations).
+                    1. MASTERED TAGS: You MUST start the line with the exact topic tag [{selected_topic}] followed by "MASTERED: " (e.g., [{selected_topic}] MASTERED: specific concept).
+                    2. GAP TAGS: You MUST start the line with the exact topic tag [{selected_topic}] followed by "GAP: " (e.g., [{selected_topic}] GAP: specific weakness).
                     3. PRUNE: If they master a previous GAP, delete that GAP tag. Keep the total summary under 150 words.
                     """
                     try:
@@ -364,7 +364,7 @@ if username and api_key:
             </style>
             """, unsafe_allow_html=True)
 
-        user_audio = st.audio_input(" Talk to Christine")
+        user_audio = st.audio_input("🎤 Talk to Christine")
         user_text = st.chat_input("...or type your question here")
 
         active_image = None
@@ -410,7 +410,7 @@ if username and api_key:
             if has_audio:
                 audio_part = {"mime_type": "audio/wav", "data": user_audio.getvalue()}
                 current_turn_content.append(audio_part)
-                display_text += "\n\n[ Voice Message]"
+                display_text += "\n\n[🎤 Voice Message]"
                 st.session_state.last_processed_audio_id = audio_id
             
             pil_image = None
@@ -436,7 +436,7 @@ if username and api_key:
                         # THE NEW ENGLISH OVERRIDE
                         action_prompt = "SYSTEM OVERRIDE: Please analyze the attached English/Literature material. Guide me through it step-by-step to improve my vocabulary, grammar, and cognitive understanding of the text. Do not give me the answers. Ask me one thought-provoking question at a time about literary devices, connotations, or characterisation based on this specific text."
                         
-                    file_label = " Attached PDF" if pdf_part else " Attached Image"
+                    file_label = "📄 Attached PDF" if pdf_part else "📸 Attached Image"
                     display_text += f"\n\n[{file_label}: {action_prompt}]"
                     st.session_state.last_processed_file_id = file_id
                 except Exception as e:
@@ -449,7 +449,7 @@ if username and api_key:
                     if pil_image:
                         st.image(pil_image, caption="Work for Review")
                     elif pdf_part:
-                        st.markdown(f" **PDF Document Uploaded:** `{active_image.name}`")
+                        st.markdown(f"📄 **PDF Document Uploaded:** `{active_image.name}`")
                 if has_audio: st.audio(user_audio) 
             
             user_data["history"].append({"role": "user", "content": display_text})
@@ -490,7 +490,7 @@ if username and api_key:
                                 chat = model.start_chat(history=chat_history)
                                 response = chat.send_message(display_text)
                     
-                        answer = response.text.replace(" Voice Response", "").replace(" Voice response", "").replace(" Voice Message", "").replace(" [Voice Message]", "").replace("*[ Voice Message]*", "").strip()
+                        answer = response.text.replace("🎤 Voice Response", "").replace("🎤 Voice response", "").replace("🎤 Voice Message", "").replace("🎤 [Voice Message]", "").replace("*[🎤 Voice Message]*", "").strip()
                         
                         if not answer:
                             answer = "I'm sorry, I had trouble processing that. Could you try asking again?"
