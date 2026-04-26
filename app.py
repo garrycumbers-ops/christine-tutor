@@ -257,8 +257,8 @@ if username and api_key:
 
         dossier_text = user_data["summary"] if user_data.get("summary") else ""
 
-        mastered_count = len(re.findall(r'MASTERED:', dossier_text, re.IGNORECASE))
-        gap_count = len(re.findall(r'GAP:', dossier_text, re.IGNORECASE))
+        mastered_count = len(re.findall(r'mastered', dossier_text, re.IGNORECASE))
+        gap_count = len(re.findall(r'gap', dossier_text, re.IGNORECASE))
         total_tracked = mastered_count + gap_count
 
         if total_tracked > 0:
