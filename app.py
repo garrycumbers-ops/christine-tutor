@@ -249,9 +249,6 @@ if username and api_key:
 
         st.sidebar.markdown("---")
         voice_on = st.sidebar.toggle("🔊 Read Christine's answers out loud")
-
-        st.sidebar.header("🧠 Christine's Notes")
-        st.sidebar.info(user_data["summary"])
         
         # ---------------------------------------------------------
         # --- NEW MASTERY PERCENTAGE TRACKER (TOPIC SPECIFIC) ---
