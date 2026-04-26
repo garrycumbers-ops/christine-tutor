@@ -217,43 +217,6 @@ if username and api_key:
         syllabus_data = load_syllabus()
         course_list = list(syllabus_data.keys())
         
-        saved_course_
-e..."):
-            db = load_data()
-            if username not in db:
-                st.session_state.user_data = {"age": None, "history": [], "summary": "New student."}
-            else:
-                st.session_state.user_data = db[username]
-                saved_topic = db[username].get("last_topic", "a new topic")
-                if saved_topic == "": saved_topic = "a new topic"
-                
-                st.session_state.user_data["history"] = [{
-                    "role": "model", 
-                    "content": f"Welcome back, {username.title()}! I've reviewed my notes, and it looks like we were working on **{saved_topic}**. Are you ready to pick up exactly where we left off, or do you want to switch topics?"
-                }]
-            st.session_state.current_user = username
-
-    user_data = st.session_state.user_data
-
-    if not user_data.get("age"):
-        st.info(f"Hi {username}! I'm Christine. Let's get set up.")
-        col1, col2 = st.columns(2)
-        with col1: age_input = st.number_input("How old are you?", min_value=11, max_value=18, step=1)
-        with col2: subject_input = st.text_input("What subject are we doing today?")
-            
-        if st.button("Start Learning"):
-            user_data["age"] = age_input
-            user_data["history"].append({"role": "model", "content": f"Hello {username}! I'm ready to help you with {subject_input}. How can we start?"})
-            save_current_student(username, user_data)
-            st.rerun()
-    else:
-        # --- SIDEBAR TOOLS ---
-        st.sidebar.title(f"👤 {username}'s Space")
-        
-        st.sidebar.caption("🗺️ Your Learning Map")
-        syllabus_data = load_syllabus()
-        course_list = list(syllabus_data.keys())
-        
         saved_course_topic = user_data.get("last_topic", "")
         if ":" in saved_course_topic:
             default_course, default_topic = saved_course_topic.split(":", 1)
@@ -285,11 +248,34 @@ e..."):
 
         st.sidebar.header("🧠 Christine's Notes")
         st.sidebar.info(user_data["summary"])
+        
+        # ---------------------------------------------------------
+        # --- NEW MASTERY PERCENTAGE TRACKER ---
+        # ---------------------------------------------------------
+        st.sidebar.divider()
+        st.sidebar.markdown("### 🏆 Your Brain Power")
+
+        dossier_text = user_data["summary"] if user_data.get("summary") else ""
+
+        mastered_count = len(re.findall(r'MASTERED:', dossier_text, re.IGNORECASE))
+        gap_count = len(re.findall(r'GAP:', dossier_text, re.IGNORECASE))
+        total_tracked = mastered_count + gap_count
+
+        if total_tracked > 0:
+            mastery_percentage = int((mastered_count / total_tracked) * 100)
+        else:
+            mastery_percentage = 0
+
+        st.sidebar.progress(mastery_percentage / 100.0)
+        st.sidebar.metric(label="Mastery Level", value=f"{mastery_percentage}%")
+        st.sidebar.caption(f"**{mastered_count}** Topics Mastered | **{gap_count}** Current Gaps")
+        # ---------------------------------------------------------
+        
         st.sidebar.markdown("---")
         
         st.sidebar.header("📸 Submit Work")
         
-        # --- NEW: Image Action Selector ---
+        # --- Image Action Selector ---
         image_action = st.sidebar.radio(
             "Step 1: What should Christine do?",
             [
@@ -298,6 +284,7 @@ e..."):
                 "Guide me through this English text"
             ]
         )
+        
         st.sidebar.caption("Step 2: Upload or snap your photo/document:")
         
         # Added 'pdf' support!
