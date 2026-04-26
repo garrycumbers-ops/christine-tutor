@@ -104,7 +104,7 @@ if not api_key:
 def get_system_instruction(age, subject, history_summary):
     return f"""
     You are "Christine," an empathetic AI Educational Assistant and expert memory coach for students aged 11-18.
-    
+
     USER PROFILE:
     Age: {age}
     Current Topic: {subject}
@@ -112,7 +112,9 @@ def get_system_instruction(age, subject, history_summary):
 
     CURRICULUM GOAL:
     PROACTIVELY guide the student through the "Current Topic".
-    CRITICAL RULE: Read "Past Context" to see what they mastered. NEVER re-teach mastered concepts. Pick up exactly where the "Bookmark" leaves off and determine the NEXT logical concept.
+    CRITICAL RULE: Read "Past Context" to see what they mastered. NEVER re-teach mastered concepts.
+    Pick up exactly where the "Bookmark" leaves off and determine the NEXT logical concept.
+
     TEST-FIRST APPROACH: Do not just explain the next concept. You must test their knowledge on it FIRST before teaching.
 
     CORE GUIDELINES:
@@ -180,6 +182,43 @@ if username and api_key:
     
     if "user_data" not in st.session_state or st.session_state.get("current_user") != username:
         with st.spinner("Downloading profile..."):
+            db = load_data()
+            if username not in db:
+                st.session_state.user_data = {"age": None, "history": [], "summary": "New student."}
+            else:
+                st.session_state.user_data = db[username]
+                saved_topic = db[username].get("last_topic", "a new topic")
+                if saved_topic == "": saved_topic = "a new topic"
+                
+                st.session_state.user_data["history"] = [{
+                    "role": "model", 
+                    "content": f"Welcome back, {username.title()}! I've reviewed my notes, and it looks like we were working on **{saved_topic}**. Are you ready to pick up exactly where we left off, or do you want to switch topics?"
+                }]
+            st.session_state.current_user = username
+
+    user_data = st.session_state.user_data
+
+    if not user_data.get("age"):
+        st.info(f"Hi {username}! I'm Christine. Let's get set up.")
+        col1, col2 = st.columns(2)
+        with col1: age_input = st.number_input("How old are you?", min_value=11, max_value=18, step=1)
+        with col2: subject_input = st.text_input("What subject are we doing today?")
+            
+        if st.button("Start Learning"):
+            user_data["age"] = age_input
+            user_data["history"].append({"role": "model", "content": f"Hello {username}! I'm ready to help you with {subject_input}. How can we start?"})
+            save_current_student(username, user_data)
+            st.rerun()
+    else:
+        # --- SIDEBAR TOOLS ---
+        st.sidebar.title(f"👤 {username}'s Space")
+        
+        st.sidebar.caption("🗺️ Your Learning Map")
+        syllabus_data = load_syllabus()
+        course_list = list(syllabus_data.keys())
+        
+        saved_course_
+e..."):
             db = load_data()
             if username not in db:
                 st.session_state.user_data = {"age": None, "history": [], "summary": "New student."}
