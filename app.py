@@ -46,7 +46,8 @@ def load_data():
             return db
         
         for row in rows[1:]:
-            while len(row) < 5:
+            # UPGRADED TO 6 COLUMNS FOR THE VAULT
+            while len(row) < 6:
                 row.append("")
                 
             name_col = str(row[0]).strip().lower()
@@ -54,6 +55,7 @@ def load_data():
             history_col = str(row[2]).strip()
             age_col = str(row[3]).strip()
             topic_col = str(row[4]).strip()
+            vault_col = str(row[5]).strip() # THE NEW VAULT COLUMN
             
             if name_col and name_col not in db:
                 try:
@@ -67,7 +69,8 @@ def load_data():
                     "summary": summary_col, 
                     "history": hist, 
                     "age": student_age, 
-                    "last_topic": topic_col
+                    "last_topic": topic_col,
+                    "file_vault": vault_col # ADDED VAULT TO DB DICTIONARY
                 }
         return db
     except Exception as e:
@@ -81,6 +84,7 @@ def save_current_student(name, data):
     hist_str = json.dumps(recent_history)
     age = data.get("age", "") 
     last_topic = data.get("last_topic", "")
+    file_vault = data.get("file_vault", "") # GRAB VAULT DATA
     
     try:
         cell = sheet.find(name, in_column=1)
@@ -88,8 +92,9 @@ def save_current_student(name, data):
         sheet.update_cell(cell.row, 3, hist_str)
         sheet.update_cell(cell.row, 4, age)
         sheet.update_cell(cell.row, 5, last_topic)
+        sheet.update_cell(cell.row, 6, file_vault) # SAVE VAULT DATA
     except Exception:
-        sheet.append_row([name, summary, hist_str, age, last_topic])
+        sheet.append_row([name, summary, hist_str, age, last_topic, file_vault])
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Christine AI Tutor", page_icon="🎓", layout="wide")
@@ -101,7 +106,10 @@ api_key = st.secrets.get("GEMINI_API_KEY", None)
 if not api_key:
     api_key = st.sidebar.text_input("Enter Google Gemini API Key", type="password")
 
-def get_system_instruction(age, subject, history_summary):
+# ADDED FILE VAULT TO HER BRAIN
+def get_system_instruction(age, subject, history_summary, file_vault=""):
+    vault_text = f"\n\nSAVED DOCUMENT VAULT:\nThe student has saved the following document to memory so they don't have to re-upload it. Use this as your primary source material if they ask to continue working on it:\n{file_vault}" if file_vault else ""
+
     return f"""
     You are "Christine," an empathetic AI Educational Assistant and expert memory coach for students aged 11-18.
 
@@ -109,6 +117,7 @@ def get_system_instruction(age, subject, history_summary):
     Age: {age}
     Current Topic: {subject}
     Past Context (Bookmark & Gaps): {history_summary}
+    {vault_text}
 
     CURRICULUM GOAL:
     PROACTIVELY guide the student through the "Current Topic".
@@ -184,7 +193,7 @@ if username and api_key:
         with st.spinner("Downloading profile..."):
             db = load_data()
             if username not in db:
-                st.session_state.user_data = {"age": None, "history": [], "summary": "New student."}
+                st.session_state.user_data = {"age": None, "history": [], "summary": "New student.", "file_vault": ""}
             else:
                 st.session_state.user_data = db[username]
                 saved_topic = db[username].get("last_topic", "a new topic")
@@ -240,7 +249,6 @@ if username and api_key:
             save_current_student(username, user_data)
             
             if is_active_switch:
-                # ---> NEW FIX: Force the dossier engine to save their mastery right now!
                 if st.session_state.unsummarized_messages > 0:
                     st.session_state.unsummarized_messages = 14 
                 
@@ -250,18 +258,13 @@ if username and api_key:
         st.sidebar.markdown("---")
         voice_on = st.sidebar.toggle("🔊 Read Christine's answers out loud")
         
-        # ---------------------------------------------------------
-        # --- NEW MASTERY PERCENTAGE TRACKER (TOPIC SPECIFIC) ---
-        # ---------------------------------------------------------
+        # --- MASTERY PERCENTAGE TRACKER ---
         st.sidebar.divider()
         st.sidebar.markdown(f"### 🏆 {selected_topic} Brain Power")
 
         dossier_text = user_data["summary"] if user_data.get("summary") else ""
-
-        # Make the TOPIC name safe for searching
         safe_topic = re.escape(selected_topic)
 
-        # Search SPECIFICALLY for tags linked to the selected topic from the dropdown
         mastered_count = len(re.findall(rf'\[{safe_topic}\]\s*mastered', dossier_text, re.IGNORECASE))
         gap_count = len(re.findall(rf'\[{safe_topic}\]\s*gap', dossier_text, re.IGNORECASE))
         total_tracked = mastered_count + gap_count
@@ -272,27 +275,24 @@ if username and api_key:
             mastery_percentage = 0
 
         st.sidebar.progress(mastery_percentage / 100.0)
+        
+        # --- CELEBRATION TRIGGER ---
+        if mastery_percentage == 100 and st.session_state.get("celebrated_topic") != selected_topic:
+            st.balloons() 
+            st.session_state["celebrated_topic"] = selected_topic
+
         st.sidebar.metric(label=f"Topic Mastery", value=f"{mastery_percentage}%")
         st.sidebar.caption(f"**{mastered_count}** Mastered | **{gap_count}** Gaps in {selected_topic}")
-        # ---------------------------------------------------------
         
         st.sidebar.markdown("---")
         
         st.sidebar.header("📸 Submit Work")
-        
-        # --- Image Action Selector ---
         image_action = st.sidebar.radio(
             "Step 1: What should Christine do?",
-            [
-                "Review my work for mistakes", 
-                "Quiz me on this content",
-                "Guide me through this English text"
-            ]
+            ["Review my work for mistakes", "Quiz me on this content", "Guide me through this English text"]
         )
         
         st.sidebar.caption("Step 2: Upload or snap your photo/document:")
-        
-        # Added 'pdf' support!
         file_input = st.sidebar.file_uploader("Upload File", type=['png', 'jpg', 'jpeg', 'webp', 'pdf'])
         st.sidebar.write("OR")
         
@@ -317,6 +317,45 @@ if username and api_key:
                     st.session_state.camera_open = False
                     st.rerun()
 
+        # ---------------------------------------------------------
+        # --- NEW: THE DOCUMENT VAULT UI ---
+        # ---------------------------------------------------------
+        st.sidebar.markdown("---")
+        st.sidebar.header("🗄️ Document Vault")
+        
+        current_vault = user_data.get("file_vault", "")
+        if current_vault:
+            st.sidebar.success("✅ A document is saved in memory for this session.")
+            with st.sidebar.expander("View Saved Document"):
+                st.write(current_vault)
+            if st.sidebar.button("🗑️ Clear Vault"):
+                user_data["file_vault"] = ""
+                save_current_student(username, user_data)
+                st.rerun()
+                
+        elif file_input or st.session_state.captured_image:
+            st.sidebar.info("Upload detected. Do you want Christine to memorize this so you don't have to upload it next time?")
+            if st.sidebar.button("💾 Memorize Document"):
+                with st.spinner("Extracting text to Vault..."):
+                    try:
+                        vault_model = genai.GenerativeModel(model_name=PRIMARY_MODEL)
+                        prompt = "Extract and transcribe all the text, questions, and relevant context from this document accurately so I can work on it later without seeing the image."
+                        
+                        if file_input and file_input.name.lower().endswith('.pdf'):
+                            pdf_data = {"mime_type": "application/pdf", "data": file_input.getvalue()}
+                            resp = vault_model.generate_content([prompt, pdf_data])
+                        else:
+                            active_img = st.session_state.captured_image if st.session_state.captured_image else Image.open(file_input)
+                            resp = vault_model.generate_content([prompt, active_img])
+                            
+                        user_data["file_vault"] = resp.text
+                        save_current_student(username, user_data)
+                        st.sidebar.success("Saved to Vault! You can close the file now.")
+                        st.rerun()
+                    except Exception as e:
+                        st.sidebar.error(f"Error saving to Vault: {e}")
+        # ---------------------------------------------------------
+
         # --- SILENT AUTO-DOSSIER ENGINE ---
         if st.session_state.unsummarized_messages >= 14:
             with st.spinner("Christine is organizing her notes..."):
@@ -324,6 +363,7 @@ if username and api_key:
                     grab_count = st.session_state.unsummarized_messages
                     recent_chat = str(user_data["history"][-grab_count:]) 
                     
+                    # UPDATED DOSSIER PROMPT TO TRACK FILE PROGRESS
                     memory_prompt = f"""
                     You are an expert teacher maintaining a highly compressed, long-term dossier on a student.
                     CURRENT DOSSIER: {user_data['summary']}
@@ -333,6 +373,7 @@ if username and api_key:
                     1. MASTERED TAGS: You MUST start the line with the exact topic tag [{selected_topic}] followed by "MASTERED: " (e.g., [{selected_topic}] MASTERED: specific concept).
                     2. GAP TAGS: You MUST start the line with the exact topic tag [{selected_topic}] followed by "GAP: " (e.g., [{selected_topic}] GAP: specific weakness).
                     3. PRUNE: If they master a previous GAP, delete that GAP tag. Keep the total summary under 150 words.
+                    4. DOCUMENT PROGRESS: If they are working on a saved document, explicitly state which specific questions or paragraphs they have ALREADY finished so Christine doesn't repeat them tomorrow.
                     """
                     try:
                         analyzer = genai.GenerativeModel(model_name="gemini-1.5-flash-8b")
@@ -414,23 +455,18 @@ if username and api_key:
             pdf_part = None
             if has_image:
                 try:
-                    # --- CHECK IF IT IS A PDF OR A PICTURE ---
                     if not isinstance(active_image, Image.Image) and active_image.name.lower().endswith('.pdf'):
-                        # It's a PDF! Bundle it natively for Gemini
                         pdf_part = {"mime_type": "application/pdf", "data": active_image.getvalue()}
                         current_turn_content.append(pdf_part)
                     else:
-                        # It's a picture! Process it normally
                         pil_image = active_image if isinstance(active_image, Image.Image) else Image.open(active_image)
                         current_turn_content.append(pil_image)
                     
-                    # --- THE SYSTEM OVERRIDE ---
                     if image_action == "Review my work for mistakes":
                         action_prompt = "SYSTEM OVERRIDE: Please review my attached work. Tell me what I did right and help me correct any mistakes one step at a time."
                     elif image_action == "Quiz me on this content":
                         action_prompt = "SYSTEM OVERRIDE: Please analyze this attached content. Do not ask if I am ready. IMMEDIATELY ask me the very first diagnostic quiz question strictly based on this material to test my understanding."
                     else:
-                        # THE NEW ENGLISH OVERRIDE
                         action_prompt = "SYSTEM OVERRIDE: Please analyze the attached English/Literature material. Guide me through it step-by-step to improve my vocabulary, grammar, and cognitive understanding of the text. Do not give me the answers. Ask me one thought-provoking question at a time about literary devices, connotations, or characterisation based on this specific text."
                         
                     file_label = "📄 Attached PDF" if pdf_part else "📸 Attached Image"
@@ -453,12 +489,11 @@ if username and api_key:
 
             # --- AI GENERATION ---
             try:
-                system_instruction = get_system_instruction(user_data["age"], current_subject, user_data["summary"])
+                # INJECTING THE VAULT DATA INTO CHRISTINE'S BRAIN
+                system_instruction = get_system_instruction(user_data["age"], current_subject, user_data["summary"], user_data.get("file_vault", ""))
                 
-                # Prevent empty message bug from ghost history
                 chat_history = convert_history_for_gemini([msg for msg in user_data["history"][:-1] if msg.get("content")])
                 
-                # Ensure first message in history is from a user for Gemini API
                 if chat_history and chat_history[0]["role"] != "user":
                     chat_history.insert(0, {"role": "user", "parts": ["Hello"]})
 
