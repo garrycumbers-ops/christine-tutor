@@ -350,22 +350,35 @@ if username and api_key:
             if st.sidebar.button("💾 Memorize Document"):
                 with st.spinner("Extracting text to Vault..."):
                     try:
-                        vault_model = genai.GenerativeModel(model_name=PRIMARY_MODEL)
-                        prompt = "Extract and transcribe all the text, questions, and relevant context from this document accurately so I can work on it later without seeing the image."
+                        extracted_text = ""
                         
+                        # IF IT IS A PDF: Instantly extract text using Python
                         if file_input and file_input.name.lower().endswith('.pdf'):
-                            pdf_data = {"mime_type": "application/pdf", "data": file_input.getvalue()}
-                            resp = vault_model.generate_content([prompt, pdf_data])
+                            pdf_reader = PyPDF2.PdfReader(file_input)
+                            for page in range(len(pdf_reader.pages)):
+                                page_text = pdf_reader.pages[page].extract_text()
+                                if page_text:
+                                    extracted_text += f"\n--- PAGE {page + 1} ---\n" + page_text
+                                    
+                        # IF IT IS AN IMAGE: Use the AI to transcribe it normally
                         else:
+                            vault_model = genai.GenerativeModel(model_name=PRIMARY_MODEL)
+                            prompt = "Extract and transcribe all the text and questions from this image accurately."
                             active_img = st.session_state.captured_image if st.session_state.captured_image else Image.open(file_input)
                             resp = vault_model.generate_content([prompt, active_img])
+                            extracted_text = resp.text
                             
-                        user_data["file_vault"] = resp.text
+                        # THE AGGRESSIVE DATABASE SAFETY LOCK
+                        if len(extracted_text) > 35000:
+                            extracted_text = extracted_text[:35000] + "\n\n[SYSTEM WARNING: Document reached the maximum database size. The end of the document was truncated.]"
+                            
+                        user_data["file_vault"] = extracted_text
                         save_current_student(username, user_data)
-                        st.sidebar.success("Saved to Vault! You can close the file now.")
+                        st.sidebar.success("Saved to Vault instantly! You can close the file now.")
                         st.rerun()
                     except Exception as e:
                         st.sidebar.error(f"Error saving to Vault: {e}")
+
         # ---------------------------------------------------------
 
         # --- SILENT AUTO-DOSSIER ENGINE ---
