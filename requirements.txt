@@ -3,3 +3,4 @@ google-generativeai>=0.7.2
 Pillow
 gTTS
 gspread
+PyPDF2
