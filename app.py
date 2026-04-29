@@ -7,6 +7,7 @@ from gtts import gTTS
 import io
 import re
 import gspread
+import PyPDF2
 
 # --- GOOGLE SHEETS ENGINE ---
 @st.cache_resource
