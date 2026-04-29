@@ -222,6 +222,18 @@ if username and api_key:
         # --- SIDEBAR TOOLS ---
         st.sidebar.title(f"👤 {username}'s Space")
         
+         # --- TEMPORARY DIAGNOSTIC BUTTON ---
+        if st.sidebar.button("🔍 Find My Models"):
+            with st.spinner("Checking Google's servers..."):
+                try:
+                    available = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+                    st.sidebar.success("Found them! Use one of these names:")
+                    for m in available:
+                        st.sidebar.code(m.replace("models/", ""))
+                except Exception as e:
+                    st.sidebar.error(f"Error checking models: {e}")
+        # -----------------------------------
+    
         st.sidebar.caption("🗺️ Your Learning Map")
         syllabus_data = load_syllabus()
         course_list = list(syllabus_data.keys())
