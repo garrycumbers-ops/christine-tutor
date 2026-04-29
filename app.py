@@ -99,8 +99,8 @@ def save_current_student(name, data):
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Christine AI Tutor", page_icon="🎓", layout="wide")
 
-PRIMARY_MODEL = "gemini-2.0-flash"
-FALLBACK_MODEL = "gemini-2.5-flash"
+PRIMARY_MODEL = "gemini-1.5-flash"
+FALLBACK_MODEL = "gemini-1.5-pro"
 
 api_key = st.secrets.get("GEMINI_API_KEY", None)
 if not api_key:
