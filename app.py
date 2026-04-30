@@ -558,16 +558,22 @@ if username and api_key:
                         
                         if voice_on:
                             try:
-                                clean_speech = answer.replace('**', '').replace('#', '').replace('`', '').replace('_', '')
+                                # --- NEW: CLEAN OUT IMAGES AND URLS FOR SPEECH ---
+                                clean_speech = re.sub(r'!\[.*?\]\(.*?\)', '', answer) # Silently removes Markdown images
+                                clean_speech = re.sub(r'http[s]?://\S+', '', clean_speech) # Silently removes raw URLs
+                                
+                                clean_speech = clean_speech.replace('**', '').replace('#', '').replace('`', '').replace('_', '')
                                 clean_speech = re.sub(r'^\s*[\*\-]\s+', ' ', clean_speech, flags=re.MULTILINE)
                                 clean_speech = re.sub(r'\s+', ' ', clean_speech).strip()
                                 
-                                sound_file = io.BytesIO()
-                                tts = gTTS(text=clean_speech, lang='en', tld='co.uk')
-                                tts.write_to_fp(sound_file)
-                                sound_file.seek(0)
-                                
-                                st.audio(sound_file, format='audio/mpeg', autoplay=True)
+                                # Only trigger audio if there are actual words left to say
+                                if clean_speech: 
+                                    sound_file = io.BytesIO()
+                                    tts = gTTS(text=clean_speech, lang='en', tld='co.uk')
+                                    tts.write_to_fp(sound_file)
+                                    sound_file.seek(0)
+                                    
+                                    st.audio(sound_file, format='audio/mpeg', autoplay=True)
                             except Exception as e:
                                 st.error(f"Audio generation skipped: {e}")
                 
