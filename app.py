@@ -423,6 +423,14 @@ if username and api_key:
         # --- INPUT & PROCESSING ---
         st.markdown("""
             <style>
+            /* Force the top header and sidebar toggle to stay permanently visible */
+            [data-testid="stHeader"] {
+                position: fixed !important;
+                top: 0 !important;
+                transform: none !important;
+                z-index: 99999 !important;
+            }
+            /* Keep the audio input floating at the bottom */
             [data-testid="stAudioInput"] { position: fixed; bottom: 85px; z-index: 999; }
             .block-container { padding-bottom: 150px !important; }
             </style>
