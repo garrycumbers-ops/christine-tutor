@@ -430,9 +430,14 @@ if username and api_key:
                 transform: none !important;
                 z-index: 99999 !important;
             }
-            /* Keep the audio input floating at the bottom */
-            [data-testid="stAudioInput"] { position: fixed; bottom: 85px; z-index: 999; }
-            .block-container { padding-bottom: 150px !important; }
+            /* Keep the audio input floating safely above the chat box */
+            [data-testid="stAudioInput"] { 
+                position: fixed; 
+                bottom: 115px; /* Bumped up from 85px to clear the text input */
+                z-index: 999; 
+            }
+            /* Add extra padding so the chat messages don't get hidden behind the mic */
+            .block-container { padding-bottom: 180px !important; } 
             </style>
             """, unsafe_allow_html=True)
 
