@@ -118,16 +118,21 @@ def background_dossier_save(username, chat_history_str, selected_topic):
         user_data = db[username]
         
         summary_model = genai.GenerativeModel(model_name=FALLBACK_MODEL)
+        
+        # --- FIXED PROMPT TO PREVENT DOSSIER OVERWRITE ---
         memory_prompt = f"""
         You are an expert teacher maintaining a highly compressed, long-term dossier on a student.
         CURRENT DOSSIER: {user_data.get('summary', '')}
         RECENT CHAT: {chat_history_str}
-        TASK: Update the dossier to track their progress specifically for the topic: {selected_topic}.
+        
+        TASK: Update the CURRENT DOSSIER with new insights from the RECENT CHAT.
+        
         CRITICAL RULES:
-        1. MASTERED TAGS: You MUST start the line with the exact topic tag [{selected_topic}] followed by "MASTERED: " 
-        2. GAP TAGS: You MUST start the line with the exact topic tag [{selected_topic}] followed by "GAP: " 
-        3. PRUNE: If they master a previous GAP, delete that GAP tag. Keep the total summary under 150 words.
-        4. DOCUMENT PROGRESS: Explicitly state which specific questions or paragraphs they have ALREADY finished from their uploaded document.
+        1. PRESERVE ALL OTHER TOPICS: You MUST keep all existing tags and notes for OTHER subjects exactly as they appear in the CURRENT DOSSIER. DO NOT delete them!
+        2. MASTERED TAGS: Start new or updated lines with [{selected_topic}] MASTERED:
+        3. GAP TAGS: Start new or updated lines with [{selected_topic}] GAP:
+        4. PRUNE: If they master a previous GAP in {selected_topic}, delete that specific GAP tag. 
+        5. DOCUMENT PROGRESS: If they are working on a saved document, explicitly state which specific questions or paragraphs they have ALREADY finished.
         """
         response = summary_model.generate_content(memory_prompt)
         user_data["summary"] = response.text.strip()
@@ -404,16 +409,20 @@ if username and api_key:
                     grab_count = st.session_state.unsummarized_messages
                     recent_chat = str(user_data["history"][-grab_count:]) 
                     
+                    # --- FIXED PROMPT TO PREVENT DOSSIER OVERWRITE ---
                     memory_prompt = f"""
                     You are an expert teacher maintaining a highly compressed, long-term dossier on a student.
-                    CURRENT DOSSIER: {user_data['summary']}
+                    CURRENT DOSSIER: {user_data.get('summary', '')}
                     RECENT CHAT: {recent_chat}
-                    TASK: Update the dossier to track their progress specifically for the topic: {selected_topic}.
+                    
+                    TASK: Update the CURRENT DOSSIER with new insights from the RECENT CHAT.
+                    
                     CRITICAL RULES:
-                    1. MASTERED TAGS: You MUST start the line with the exact topic tag [{selected_topic}] followed by "MASTERED: "
-                    2. GAP TAGS: You MUST start the line with the exact topic tag [{selected_topic}] followed by "GAP: "
-                    3. PRUNE: If they master a previous GAP, delete that GAP tag. Keep the total summary under 150 words.
-                    4. DOCUMENT PROGRESS: If they are working on a saved document, explicitly state which specific questions or paragraphs they have ALREADY finished so Christine doesn't repeat them tomorrow.
+                    1. PRESERVE ALL OTHER TOPICS: You MUST keep all existing tags and notes for OTHER subjects exactly as they appear in the CURRENT DOSSIER. DO NOT delete them!
+                    2. MASTERED TAGS: Start new or updated lines with [{selected_topic}] MASTERED:
+                    3. GAP TAGS: Start new or updated lines with [{selected_topic}] GAP:
+                    4. PRUNE: If they master a previous GAP in {selected_topic}, delete that specific GAP tag. 
+                    5. DOCUMENT PROGRESS: If they are working on a saved document, explicitly state which specific questions or paragraphs they have ALREADY finished.
                     """
                     try:
                         analyzer = genai.GenerativeModel(model_name="gemini-1.5-flash-8b")
