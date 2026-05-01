@@ -108,18 +108,16 @@ api_key = st.secrets.get("GEMINI_API_KEY", None)
 if not api_key:
     api_key = st.sidebar.text_input("Enter Google Gemini API Key", type="password")
 
-# --- NEW: BACKGROUND DOSSIER SAVER (INACTIVITY TIMER) ---
+# --- BACKGROUND DOSSIER SAVER (INACTIVITY TIMER) ---
 def background_dossier_save(username, chat_history_str, selected_topic):
     """Runs silently in a background thread when the student stops typing for 5 minutes."""
     try:
-        # Load fresh data from the DB to avoid Streamlit session state issues in threads
         db = load_data()
         if username not in db: return
         user_data = db[username]
         
         summary_model = genai.GenerativeModel(model_name=FALLBACK_MODEL)
         
-        # --- FIXED PROMPT TO PREVENT DOSSIER OVERWRITE ---
         memory_prompt = f"""
         You are an expert teacher maintaining a highly compressed, long-term dossier on a student.
         CURRENT DOSSIER: {user_data.get('summary', '')}
@@ -137,7 +135,6 @@ def background_dossier_save(username, chat_history_str, selected_topic):
         response = summary_model.generate_content(memory_prompt)
         user_data["summary"] = response.text.strip()
         
-        # Save straight to Google Sheets
         save_current_student(username, user_data)
         print(f"✅ Inactivity Timer triggered! Dossier saved for {username}.")
     except Exception as e:
@@ -172,15 +169,25 @@ def get_system_instruction(age, subject, history_summary, file_vault=""):
     6. **The Memory Rule:** NEVER use the Kevin Horsley memory techniques by default. Always teach standard academic concepts first.
     7. **STRICT GUARDRAILS:** Keep the student focused on the "Current Topic" ({subject}). HOWEVER, if the recent chat history involves an uploaded image or file, this is a SYSTEM OVERRIDE. You must pause the current topic and completely focus on reviewing or quizzing them on that uploaded material until the exercise is completely finished.
     8. **ENGLISH & LITERATURE ANALYSIS:** If the student uploads a text or reading assignment, act as a Socratic English teacher. Focus on extracting meaning, analyzing connotations, exploring literary devices (imagery, metaphors, personification), and improving their vocabulary. NEVER write analytical paragraphs (like PEE/PEEL) for them; scaffold their writing strictly one sentence at a time.
-    9. **DYNAMIC VISUAL LEARNING:** You are now a highly visual tutor. Whenever you are introducing a new historical event, a science concept, a character from a book, or a real-world object, you MUST generate a visual aid for the student. Do this by secretly injecting this exact Markdown format into your response: 
+    9. **DYNAMIC VISUAL LEARNING (HISTORY, ENGLISH, BIOLOGY):** Whenever you are introducing a new concept in these subjects, OR generating a "Figure 1" for an exam question, you MUST generate a visual aid for the student. Do this by secretly injecting this exact Markdown format into your response: 
     ![Image](https://image.pollinations.ai/prompt/A%20highly%20detailed%20educational%20illustration%20of%20[YOUR_DESCRIPTION_HERE]?width=800&height=400&nologo=true)
-    Replace [YOUR_DESCRIPTION_HERE] with a highly descriptive prompt. YOU MUST REPLACE ALL SPACES IN THE URL WITH %20. Never ask the student if they want to see an image; just embed it directly above your explanation.
-    10. **MATH & PHYSICS VISUALS (THE ASSET VAULT):** If the student is asking about math, geometry, or physics, NEVER use the AI image generator from Rule 9. For equations, use perfect LaTeX formatting (e.g., $x = y^2$). If the topic requires a visual diagram (like charts, weights, or graphs), you MUST use one of the approved, mathematically accurate images from our Asset Vault by injecting its exact Markdown link into your response:
-    - Balance Scale / Mass: `![Balance Scale](https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Balance_scale.png/400px-Balance_scale.png)`
+    Replace [YOUR_DESCRIPTION_HERE] with a highly descriptive prompt. YOU MUST REPLACE ALL SPACES IN THE URL WITH %20. Never ask the student if they want to see an image; just embed it directly above your explanation. NEVER use this generator for Maths, Physics, or Geography maps.
+    10. **MATH, PHYSICS, & GEOGRAPHY VISUALS (THE ASSET VAULT):** If the topic requires a precise mathematical graph, geometry shape, physics diagram, or GEOGRAPHY MAP, NEVER use the AI image generator from Rule 9. AI cannot draw accurate maps or graphs. You MUST use one of the approved, accurate images from our Asset Vault by injecting its exact Markdown link into your response:
+    **Geography Vault:**
+    - World Map: `![World Map](https://upload.wikimedia.org/wikipedia/commons/thumb/8/80/World_map_-_low_resolution.svg/800px-World_map_-_low_resolution.svg.png)`
+    - Tectonic Plates: `![Tectonic Plates](https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/Plates_tect2_en.svg/800px-Plates_tect2_en.svg.png)`
+    - UK Map: `![UK Map](https://upload.wikimedia.org/wikipedia/commons/thumb/d/d1/United_Kingdom_adm_location_map.svg/400px-United_Kingdom_adm_location_map.svg.png)`
+    - Water Cycle: `![Water Cycle](https://upload.wikimedia.org/wikipedia/commons/thumb/9/94/Water_cycle.png/800px-Water_cycle.png)`
+    **Maths & Physics Vault:**
     - Coordinate Grid: `![Coordinate Grid](https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/Cartesian_coordinate_system.svg/400px-Cartesian_coordinate_system.svg.png)`
     - Pie Chart: `![Pie Chart](https://upload.wikimedia.org/wikipedia/commons/thumb/b/b4/Pie_charts_of_populations_of_English_native_speakers.png/400px-Pie_charts_of_populations_of_English_native_speakers.png)`
     - Protractor / Angles: `![Protractor](https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Protractor1.svg/400px-Protractor1.svg.png)`
-    If an appropriate image is not in this vault, do not generate one. Simply describe it clearly or use LaTeX.
+    - Right-Angled Triangle: `![Right Triangle](https://upload.wikimedia.org/wikipedia/commons/thumb/a/a4/Right_triangle_with_a%2Cb%2Cc.svg/400px-Right_triangle_with_a%2Cb%2Cc.svg.png)`
+    - Circle with Tangent: `![Circle Tangent](https://upload.wikimedia.org/wikipedia/commons/thumb/e/e6/Tangent_to_a_circle.svg/400px-Tangent_to_a_circle.svg.png)`
+    - Parallel Lines & Transversal: `![Parallel Lines](https://upload.wikimedia.org/wikipedia/commons/thumb/3/37/Transversal_lines.svg/400px-Transversal_lines.svg.png)`
+    - Blank Histogram: `![Histogram](https://upload.wikimedia.org/wikipedia/commons/thumb/c/c3/Histogram_of_arrivals_per_minute.svg/400px-Histogram_of_arrivals_per_minute.svg.png)`
+    - Balance Scale / Mass: `![Balance Scale](https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Balance_scale.png/400px-Balance_scale.png)`
+    If an appropriate image is not in this vault, do not generate one. Simply describe the geometry/geography clearly or ask the student to refer to their textbook.
     
     MODES OF OPERATION:
     A) TEST-FIRST TEACHING MODE (DEFAULT):
@@ -402,14 +409,13 @@ if username and api_key:
                     except Exception as e:
                         st.sidebar.error(f"Error saving to Vault: {e}")
 
-        # --- ACTIVE AUTO-DOSSIER (HEAVY USAGE BATCHER) ---
+        # --- ACTIVE AUTO-DOSSIER ---
         if st.session_state.unsummarized_messages >= 14:
             with st.spinner("Christine is organizing her notes..."):
                 try:
                     grab_count = st.session_state.unsummarized_messages
                     recent_chat = str(user_data["history"][-grab_count:]) 
                     
-                    # --- FIXED PROMPT TO PREVENT DOSSIER OVERWRITE ---
                     memory_prompt = f"""
                     You are an expert teacher maintaining a highly compressed, long-term dossier on a student.
                     CURRENT DOSSIER: {user_data.get('summary', '')}
@@ -526,7 +532,11 @@ if username and api_key:
                     elif image_action == "Quiz me on this content":
                         action_prompt = "SYSTEM OVERRIDE: Please analyze this attached content. Do not ask if I am ready. IMMEDIATELY ask me the very first diagnostic quiz question strictly based on this material to test my understanding."
                     elif image_action == "Train me for an Exam (AQA Style)":
-                        action_prompt = f"SYSTEM OVERRIDE: Act as a strict AQA Examiner for our current subject ({current_subject}). Analyze the attached document. Generate a brand new, realistic exam question based on this material using standard AQA command words. DO NOT give me the answer. Socratic scaffold my response strictly one step at a time by walking me through the specific Assessment Objectives (AOs) for this exact subject. Secure AO1 first, then move to AO2 and AO3."
+                        action_prompt = f"""SYSTEM OVERRIDE: Act as a strict AQA Examiner for our current subject ({current_subject}). 
+                        1. Look at the attached document. 
+                        2. Before asking your question, you MUST generate a visual aid related to the topic using your Markdown image tools (Rule 9 or Rule 10) and label it '**Figure 1**'. 
+                        3. Generate a brand new, realistic exam question based on the document and 'Figure 1' using standard AQA command words. 
+                        4. DO NOT give me the answer. Socratic scaffold my response strictly one step at a time by walking me through the Assessment Objectives (AOs) for this subject. Secure AO1 first."""
                     else:
                         action_prompt = "SYSTEM OVERRIDE: Please analyze the attached material. Guide me through it step-by-step to improve my core understanding of the concepts. Do not give me the answers. Ask me one thought-provoking question at a time based on this specific text/image."
                         
