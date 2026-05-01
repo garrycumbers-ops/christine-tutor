@@ -8,6 +8,8 @@ import io
 import re
 import gspread
 import PyPDF2
+import threading
+import time
 
 # --- GOOGLE SHEETS ENGINE ---
 @st.cache_resource
@@ -47,7 +49,6 @@ def load_data():
             return db
         
         for row in rows[1:]:
-            # UPGRADED TO 6 COLUMNS FOR THE VAULT
             while len(row) < 6:
                 row.append("")
                 
@@ -56,7 +57,7 @@ def load_data():
             history_col = str(row[2]).strip()
             age_col = str(row[3]).strip()
             topic_col = str(row[4]).strip()
-            vault_col = str(row[5]).strip() # THE NEW VAULT COLUMN
+            vault_col = str(row[5]).strip() 
             
             if name_col and name_col not in db:
                 try:
@@ -71,7 +72,7 @@ def load_data():
                     "history": hist, 
                     "age": student_age, 
                     "last_topic": topic_col,
-                    "file_vault": vault_col # ADDED VAULT TO DB DICTIONARY
+                    "file_vault": vault_col 
                 }
         return db
     except Exception as e:
@@ -85,7 +86,7 @@ def save_current_student(name, data):
     hist_str = json.dumps(recent_history)
     age = data.get("age", "") 
     last_topic = data.get("last_topic", "")
-    file_vault = data.get("file_vault", "") # GRAB VAULT DATA
+    file_vault = data.get("file_vault", "") 
     
     try:
         cell = sheet.find(name, in_column=1)
@@ -93,7 +94,7 @@ def save_current_student(name, data):
         sheet.update_cell(cell.row, 3, hist_str)
         sheet.update_cell(cell.row, 4, age)
         sheet.update_cell(cell.row, 5, last_topic)
-        sheet.update_cell(cell.row, 6, file_vault) # SAVE VAULT DATA
+        sheet.update_cell(cell.row, 6, file_vault)
     except Exception:
         sheet.append_row([name, summary, hist_str, age, last_topic, file_vault])
 
@@ -107,7 +108,37 @@ api_key = st.secrets.get("GEMINI_API_KEY", None)
 if not api_key:
     api_key = st.sidebar.text_input("Enter Google Gemini API Key", type="password")
 
-# ADDED FILE VAULT TO HER BRAIN
+# --- NEW: BACKGROUND DOSSIER SAVER (INACTIVITY TIMER) ---
+def background_dossier_save(username, chat_history_str, selected_topic):
+    """Runs silently in a background thread when the student stops typing for 5 minutes."""
+    try:
+        # Load fresh data from the DB to avoid Streamlit session state issues in threads
+        db = load_data()
+        if username not in db: return
+        user_data = db[username]
+        
+        summary_model = genai.GenerativeModel(model_name=FALLBACK_MODEL)
+        memory_prompt = f"""
+        You are an expert teacher maintaining a highly compressed, long-term dossier on a student.
+        CURRENT DOSSIER: {user_data.get('summary', '')}
+        RECENT CHAT: {chat_history_str}
+        TASK: Update the dossier to track their progress specifically for the topic: {selected_topic}.
+        CRITICAL RULES:
+        1. MASTERED TAGS: You MUST start the line with the exact topic tag [{selected_topic}] followed by "MASTERED: " 
+        2. GAP TAGS: You MUST start the line with the exact topic tag [{selected_topic}] followed by "GAP: " 
+        3. PRUNE: If they master a previous GAP, delete that GAP tag. Keep the total summary under 150 words.
+        4. DOCUMENT PROGRESS: Explicitly state which specific questions or paragraphs they have ALREADY finished from their uploaded document.
+        """
+        response = summary_model.generate_content(memory_prompt)
+        user_data["summary"] = response.text.strip()
+        
+        # Save straight to Google Sheets
+        save_current_student(username, user_data)
+        print(f"✅ Inactivity Timer triggered! Dossier saved for {username}.")
+    except Exception as e:
+        print(f"Background save failed: {e}")
+
+# --- AI BRAIN RULES ---
 def get_system_instruction(age, subject, history_summary, file_vault=""):
     vault_text = f"\n\nSAVED DOCUMENT VAULT:\nThe student has saved the following document to memory so they don't have to re-upload it. Use this as your primary source material if they ask to continue working on it:\n{file_vault}" if file_vault else ""
 
@@ -277,7 +308,6 @@ if username and api_key:
 
         st.sidebar.progress(mastery_percentage / 100.0)
         
-        # --- CELEBRATION TRIGGER ---
         if mastery_percentage == 100 and st.session_state.get("celebrated_topic") != selected_topic:
             st.balloons() 
             st.session_state["celebrated_topic"] = selected_topic
@@ -290,7 +320,12 @@ if username and api_key:
         st.sidebar.header("📸 Submit Work")
         image_action = st.sidebar.radio(
             "Step 1: What should Christine do?",
-            ["Review my work for mistakes", "Quiz me on this content", "Guide me through this English text"]
+            [
+                "Review my work for mistakes", 
+                "Quiz me on this content", 
+                "Guide me through this material",
+                "Train me for an Exam (AQA Style)"
+            ]
         )
         
         st.sidebar.caption("Step 2: Upload or snap your photo/document:")
@@ -318,9 +353,7 @@ if username and api_key:
                     st.session_state.camera_open = False
                     st.rerun()
 
-        # ---------------------------------------------------------
-        # --- NEW: THE DOCUMENT VAULT UI ---
-        # ---------------------------------------------------------
+        # --- THE DOCUMENT VAULT UI ---
         st.sidebar.markdown("---")
         st.sidebar.header("🗄️ Document Vault")
         
@@ -341,15 +374,12 @@ if username and api_key:
                     try:
                         extracted_text = ""
                         
-                        # IF IT IS A PDF: Instantly extract text using Python
                         if file_input and file_input.name.lower().endswith('.pdf'):
                             pdf_reader = PyPDF2.PdfReader(file_input)
                             for page in range(len(pdf_reader.pages)):
                                 page_text = pdf_reader.pages[page].extract_text()
                                 if page_text:
                                     extracted_text += f"\n--- PAGE {page + 1} ---\n" + page_text
-                                    
-                        # IF IT IS AN IMAGE: Use the AI to transcribe it normally
                         else:
                             vault_model = genai.GenerativeModel(model_name=PRIMARY_MODEL)
                             prompt = "Extract and transcribe all the text and questions from this image accurately."
@@ -357,7 +387,6 @@ if username and api_key:
                             resp = vault_model.generate_content([prompt, active_img])
                             extracted_text = resp.text
                             
-                        # THE AGGRESSIVE DATABASE SAFETY LOCK
                         if len(extracted_text) > 35000:
                             extracted_text = extracted_text[:35000] + "\n\n[SYSTEM WARNING: Document reached the maximum database size. The end of the document was truncated.]"
                             
@@ -368,24 +397,21 @@ if username and api_key:
                     except Exception as e:
                         st.sidebar.error(f"Error saving to Vault: {e}")
 
-        # ---------------------------------------------------------
-
-        # --- SILENT AUTO-DOSSIER ENGINE ---
+        # --- ACTIVE AUTO-DOSSIER (HEAVY USAGE BATCHER) ---
         if st.session_state.unsummarized_messages >= 14:
             with st.spinner("Christine is organizing her notes..."):
                 try:
                     grab_count = st.session_state.unsummarized_messages
                     recent_chat = str(user_data["history"][-grab_count:]) 
                     
-                    # UPDATED DOSSIER PROMPT TO TRACK FILE PROGRESS
                     memory_prompt = f"""
                     You are an expert teacher maintaining a highly compressed, long-term dossier on a student.
                     CURRENT DOSSIER: {user_data['summary']}
                     RECENT CHAT: {recent_chat}
                     TASK: Update the dossier to track their progress specifically for the topic: {selected_topic}.
                     CRITICAL RULES:
-                    1. MASTERED TAGS: You MUST start the line with the exact topic tag [{selected_topic}] followed by "MASTERED: " (e.g., [{selected_topic}] MASTERED: specific concept).
-                    2. GAP TAGS: You MUST start the line with the exact topic tag [{selected_topic}] followed by "GAP: " (e.g., [{selected_topic}] GAP: specific weakness).
+                    1. MASTERED TAGS: You MUST start the line with the exact topic tag [{selected_topic}] followed by "MASTERED: "
+                    2. GAP TAGS: You MUST start the line with the exact topic tag [{selected_topic}] followed by "GAP: "
                     3. PRUNE: If they master a previous GAP, delete that GAP tag. Keep the total summary under 150 words.
                     4. DOCUMENT PROGRESS: If they are working on a saved document, explicitly state which specific questions or paragraphs they have ALREADY finished so Christine doesn't repeat them tomorrow.
                     """
@@ -411,20 +437,17 @@ if username and api_key:
         # --- INPUT & PROCESSING ---
         st.markdown("""
             <style>
-            /* Force the top header and sidebar toggle to stay permanently visible */
             [data-testid="stHeader"] {
                 position: fixed !important;
                 top: 0 !important;
                 transform: none !important;
                 z-index: 99999 !important;
             }
-            /* Keep the audio input floating safely above the chat box */
             [data-testid="stAudioInput"] { 
                 position: fixed; 
-                bottom: 115px; /* Bumped up from 85px to clear the text input */
+                bottom: 115px; 
                 z-index: 999; 
             }
-            /* Add extra padding so the chat messages don't get hidden behind the mic */
             .block-container { padding-bottom: 180px !important; } 
             </style>
             """, unsafe_allow_html=True)
@@ -493,8 +516,10 @@ if username and api_key:
                         action_prompt = "SYSTEM OVERRIDE: Please review my attached work. Tell me what I did right and help me correct any mistakes one step at a time."
                     elif image_action == "Quiz me on this content":
                         action_prompt = "SYSTEM OVERRIDE: Please analyze this attached content. Do not ask if I am ready. IMMEDIATELY ask me the very first diagnostic quiz question strictly based on this material to test my understanding."
+                    elif image_action == "Train me for an Exam (AQA Style)":
+                        action_prompt = f"SYSTEM OVERRIDE: Act as a strict AQA Examiner for our current subject ({current_subject}). Analyze the attached document. Generate a brand new, realistic exam question based on this material using standard AQA command words. DO NOT give me the answer. Socratic scaffold my response strictly one step at a time by walking me through the specific Assessment Objectives (AOs) for this exact subject. Secure AO1 first, then move to AO2 and AO3."
                     else:
-                        action_prompt = "SYSTEM OVERRIDE: Please analyze the attached English/Literature material. Guide me through it step-by-step to improve my vocabulary, grammar, and cognitive understanding of the text. Do not give me the answers. Ask me one thought-provoking question at a time about literary devices, connotations, or characterisation based on this specific text."
+                        action_prompt = "SYSTEM OVERRIDE: Please analyze the attached material. Guide me through it step-by-step to improve my core understanding of the concepts. Do not give me the answers. Ask me one thought-provoking question at a time based on this specific text/image."
                         
                     file_label = "📄 Attached PDF" if pdf_part else "📸 Attached Image"
                     display_text += f"\n\n[{file_label}: {action_prompt}]"
@@ -514,12 +539,22 @@ if username and api_key:
             
             user_data["history"].append({"role": "user", "content": display_text})
 
+            # --- SMART MEMORY OVERRIDE ---
+            raw_history = [msg for msg in user_data["history"][:-1] if msg.get("content")]
+            MAX_HISTORY = 10
+            
+            if len(raw_history) > MAX_HISTORY:
+                pinned_context = raw_history[:2]
+                recent_context = raw_history[-8:]
+                optimized_raw_history = pinned_context + recent_context
+            else:
+                optimized_raw_history = raw_history
+                
+            chat_history = convert_history_for_gemini(optimized_raw_history)
+
             # --- AI GENERATION ---
             try:
-                # INJECTING THE VAULT DATA INTO CHRISTINE'S BRAIN
                 system_instruction = get_system_instruction(user_data["age"], current_subject, user_data["summary"], user_data.get("file_vault", ""))
-                
-                chat_history = convert_history_for_gemini([msg for msg in user_data["history"][:-1] if msg.get("content")])
                 
                 if chat_history and chat_history[0]["role"] != "user":
                     chat_history.insert(0, {"role": "user", "parts": ["Hello"]})
@@ -558,15 +593,12 @@ if username and api_key:
                         
                         if voice_on:
                             try:
-                                # --- NEW: CLEAN OUT IMAGES AND URLS FOR SPEECH ---
-                                clean_speech = re.sub(r'!\[.*?\]\(.*?\)', '', answer) # Silently removes Markdown images
-                                clean_speech = re.sub(r'http[s]?://\S+', '', clean_speech) # Silently removes raw URLs
-                                
+                                clean_speech = re.sub(r'!\[.*?\]\(.*?\)', '', answer)
+                                clean_speech = re.sub(r'http[s]?://\S+', '', clean_speech) 
                                 clean_speech = clean_speech.replace('**', '').replace('#', '').replace('`', '').replace('_', '')
                                 clean_speech = re.sub(r'^\s*[\*\-]\s+', ' ', clean_speech, flags=re.MULTILINE)
                                 clean_speech = re.sub(r'\s+', ' ', clean_speech).strip()
                                 
-                                # Only trigger audio if there are actual words left to say
                                 if clean_speech: 
                                     sound_file = io.BytesIO()
                                     tts = gTTS(text=clean_speech, lang='en', tld='co.uk')
@@ -583,6 +615,17 @@ if username and api_key:
                 user_data["history"].append({"role": "model", "content": answer})
                 save_current_student(username, user_data)
                 st.session_state.unsummarized_messages += 2
+
+                # --- THE INACTIVITY TIMER ACTIVATION ---
+                if 'dossier_timer' in st.session_state and st.session_state.dossier_timer.is_alive():
+                    st.session_state.dossier_timer.cancel()
+                    
+                st.session_state.dossier_timer = threading.Timer(
+                    300.0, 
+                    background_dossier_save, 
+                    args=[username, str(optimized_raw_history), current_subject]
+                )
+                st.session_state.dossier_timer.start()
 
             except Exception as e:
                  st.error(f"Connection Error: {e}")
