@@ -7,6 +7,7 @@ from gtts import gTTS
 import io
 import re
 import gspread
+import PyPDF2
 import threading
 import time
 
@@ -247,10 +248,17 @@ if username and api_key:
                 saved_topic = db[username].get("last_topic", "a new topic")
                 if saved_topic == "": saved_topic = "a new topic"
                 
-                st.session_state.user_data["history"] = [{
-                    "role": "model", 
-                    "content": f"Welcome back, {username.title()}! I've reviewed my notes, and it looks like we were working on **{saved_topic}**. Are you ready to pick up exactly where we left off, or do you want to switch topics?"
-                }]
+                # --- FIX: DO NOT OVERWRITE EXISTING CHAT HISTORY ON RELOAD ---
+                if len(st.session_state.user_data.get("history", [])) == 0:
+                    st.session_state.user_data["history"] = [{
+                        "role": "model", 
+                        "content": f"Welcome back, {username.title()}! I've reviewed my notes, and it looks like we were working on **{saved_topic}**. Are you ready to pick up exactly where we left off, or do you want to switch topics?"
+                    }]
+                else:
+                    st.session_state.user_data["history"].append({
+                        "role": "model", 
+                        "content": f"*(Session restored. Continuing with **{saved_topic}**)*"
+                    })
             st.session_state.current_user = username
 
     user_data = st.session_state.user_data
@@ -390,12 +398,10 @@ if username and api_key:
                     try:
                         extracted_text = ""
                         
-                        # --- THE GEMINI VAULT UPGRADE ---
                         vault_model = genai.GenerativeModel(model_name=PRIMARY_MODEL)
                         prompt = "Extract and transcribe all the text, questions, and content from this document accurately."
                         
                         if file_input and file_input.name.lower().endswith('.pdf'):
-                            # Gemini natively reads the PDF perfectly!
                             pdf_part = {"mime_type": "application/pdf", "data": file_input.getvalue()}
                             resp = vault_model.generate_content([prompt, pdf_part])
                             extracted_text = resp.text
