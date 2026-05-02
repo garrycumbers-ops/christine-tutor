@@ -247,13 +247,11 @@ if username and api_key:
                 saved_topic = db[username].get("last_topic", "a new topic")
                 if saved_topic == "": saved_topic = "a new topic"
                 
-                # --- FIX: SILENTLY RESTORE CHAT IF IT ALREADY EXISTS ---
                 if len(st.session_state.user_data.get("history", [])) == 0:
                     st.session_state.user_data["history"] = [{
                         "role": "model", 
                         "content": f"Welcome back, {username.title()}! How can we start today?"
                     }]
-                # If history > 0, we do nothing and let the chat history display naturally!
             st.session_state.current_user = username
 
     user_data = st.session_state.user_data
@@ -539,14 +537,16 @@ if username and api_key:
                         pil_image = active_image if isinstance(active_image, Image.Image) else Image.open(active_image)
                         current_turn_content.append(pil_image)
                     
+                    # --- FIX: FORTIFIED OVERRIDE PROMPTS ---
                     if image_action == "Review my work for mistakes":
                         action_prompt = """SYSTEM OVERRIDE: Please review my attached work. 
                         1. If the attachment is a completed test or worksheet, FIRST give me a clear summary of my overall score (e.g., 'You got 8 out of 10 correct!'). 
                         2. Praise me for what I got right.
                         3. THEN, help me correct the ones I got wrong strictly ONE question at a time. Do not just give me the right answers. Use Socratic scaffolding to guide me to the correct answer.
-                        4. If it's not a test, just tell me what I did right and help me correct any mistakes step-by-step."""
+                        4. CRITICAL: You must stay in this review mode. DO NOT switch back to teaching the main subject/topic until every single mistake in this document has been corrected.
+                        5. If it's not a test, just tell me what I did right and help me correct any mistakes step-by-step."""
                     elif image_action == "Quiz me on this content":
-                        action_prompt = "SYSTEM OVERRIDE: Please analyze this attached content. Do not ask if I am ready. IMMEDIATELY ask me the very first diagnostic quiz question strictly based on this material to test my understanding."
+                        action_prompt = "SYSTEM OVERRIDE: Please analyze this attached content. Do not ask if I am ready. IMMEDIATELY ask me the very first diagnostic quiz question strictly based on this material to test my understanding. CRITICAL: Do not switch back to the main topic until the quiz is finished."
                     elif image_action == "Train me for an Exam (AQA Style)":
                         action_prompt = f"""SYSTEM OVERRIDE: Act as a strict AQA Examiner for our current subject ({current_subject}). 
                         1. Look at the attached document. 
@@ -574,14 +574,26 @@ if username and api_key:
             
             user_data["history"].append({"role": "user", "content": display_text})
 
-            # --- SMART MEMORY OVERRIDE ---
+            # --- SMART MEMORY OVERRIDE FIX: STICKY UPLOADS ---
             raw_history = [msg for msg in user_data["history"][:-1] if msg.get("content")]
             MAX_HISTORY = 10
             
             if len(raw_history) > MAX_HISTORY:
                 pinned_context = raw_history[:2]
                 recent_context = raw_history[-8:]
-                optimized_raw_history = pinned_context + recent_context
+                
+                # Check the "deleted middle" for the most recent system override/upload
+                middle_context = raw_history[2:-8]
+                override_msg = None
+                for msg in reversed(middle_context):
+                    if "SYSTEM OVERRIDE" in msg.get("content", ""):
+                        override_msg = msg
+                        break 
+                        
+                if override_msg:
+                    optimized_raw_history = pinned_context + [override_msg] + recent_context
+                else:
+                    optimized_raw_history = pinned_context + recent_context
             else:
                 optimized_raw_history = raw_history
                 
