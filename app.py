@@ -3,6 +3,7 @@ import json
 import os
 import google.generativeai as genai
 from PIL import Image
+from gtts import gTTS
 import io
 import re
 import gspread
@@ -141,8 +142,8 @@ def background_dossier_save(username, chat_history_str, selected_topic):
         
         CRITICAL RULES:
         1. PRESERVE ALL OTHER TOPICS: You MUST keep all existing tags and notes for OTHER subjects exactly as they appear in the CURRENT DOSSIER. DO NOT delete them!
-        2. MASTERED TAGS: Start new or updated lines with [{selected_topic}] MASTERED:
-        3. GAP TAGS: Start new or updated lines with [{selected_topic}] GAP:
+        2. MASTERED TAGS: Start new or updated lines with exact format: [{selected_topic}] MASTERED:
+        3. GAP TAGS: Start new or updated lines with exact format: [{selected_topic}] GAP:
         4. PRUNE: If they master a previous GAP in {selected_topic}, delete that specific GAP tag. 
         5. DOCUMENT PROGRESS: If they are working on a saved document, explicitly state which specific questions or paragraphs they have ALREADY finished.
         """
@@ -321,15 +322,16 @@ if username and api_key:
         st.sidebar.markdown("---")
         voice_on = st.sidebar.toggle("🔊 Read Christine's answers out loud")
         
-        # --- MASTERY PERCENTAGE TRACKER ---
+        # --- MASTERY PERCENTAGE TRACKER (BULLETPROOF REGEX FIX) ---
         st.sidebar.divider()
         st.sidebar.markdown(f"### 🏆 {selected_topic} Brain Power")
 
         dossier_text = user_data["summary"] if user_data.get("summary") else ""
         safe_topic = re.escape(selected_topic)
 
-        mastered_count = len(re.findall(rf'\[{safe_topic}\]\s*mastered', dossier_text, re.IGNORECASE))
-        gap_count = len(re.findall(rf'\[{safe_topic}\]\s*gap', dossier_text, re.IGNORECASE))
+        # Allow for weird AI formatting like [Cells] **MASTERED**:
+        mastered_count = len(re.findall(rf'\[{safe_topic}\][\s\-\*\:]*mastered', dossier_text, re.IGNORECASE))
+        gap_count = len(re.findall(rf'\[{safe_topic}\][\s\-\*\:]*gap', dossier_text, re.IGNORECASE))
         total_tracked = mastered_count + gap_count
 
         if total_tracked > 0:
@@ -447,8 +449,8 @@ if username and api_key:
                     
                     CRITICAL RULES:
                     1. PRESERVE ALL OTHER TOPICS: You MUST keep all existing tags and notes for OTHER subjects exactly as they appear in the CURRENT DOSSIER. DO NOT delete them!
-                    2. MASTERED TAGS: Start new or updated lines with [{selected_topic}] MASTERED:
-                    3. GAP TAGS: Start new or updated lines with [{selected_topic}] GAP:
+                    2. MASTERED TAGS: Start new or updated lines with exact format: [{selected_topic}] MASTERED:
+                    3. GAP TAGS: Start new or updated lines with exact format: [{selected_topic}] GAP:
                     4. PRUNE: If they master a previous GAP in {selected_topic}, delete that specific GAP tag. 
                     5. DOCUMENT PROGRESS: If they are working on a saved document, explicitly state which specific questions or paragraphs they have ALREADY finished.
                     """
@@ -659,7 +661,6 @@ if username and api_key:
                                 clean_speech = re.sub(r'\s+', ' ', clean_speech).strip()
                                 
                                 if clean_speech: 
-                                    # --- NEW: EDGE-TTS AUDIO INTEGRATION ---
                                     audio_bytes = get_edge_tts_audio(clean_speech)
                                     st.audio(audio_bytes, format='audio/mpeg', autoplay=True)
                             except Exception as e:
@@ -672,14 +673,14 @@ if username and api_key:
                 save_current_student(username, user_data)
                 st.session_state.unsummarized_messages += 2
 
-                # --- THE INACTIVITY TIMER ACTIVATION ---
+                # --- THE INACTIVITY TIMER ACTIVATION FIX ---
                 if 'dossier_timer' in st.session_state and st.session_state.dossier_timer.is_alive():
                     st.session_state.dossier_timer.cancel()
                     
                 st.session_state.dossier_timer = threading.Timer(
                     300.0, 
                     background_dossier_save, 
-                    args=[username, str(optimized_raw_history), current_subject]
+                    args=[username, str(optimized_raw_history), selected_topic] # FIX: Passes strictly the Topic!
                 )
                 st.session_state.dossier_timer.start()
 
