@@ -7,7 +7,6 @@ from gtts import gTTS
 import io
 import re
 import gspread
-import PyPDF2
 import threading
 import time
 
@@ -59,7 +58,8 @@ def load_data():
             topic_col = str(row[4]).strip()
             vault_col = str(row[5]).strip() 
             
-            if name_col and name_col not in db:
+            # --- FIX: ALWAYS USE THE LAST/NEWEST ROW IN DB TO PREVENT DUPLICATE BUGS ---
+            if name_col:
                 try:
                     hist = json.loads(history_col)
                 except:
@@ -235,7 +235,6 @@ if username and api_key:
     
     if "user_data" not in st.session_state or st.session_state.get("current_user") != username:
         with st.spinner("Downloading profile..."):
-            # --- FIX 1: WIPE THE GHOST FILE MEMORY ON LOGIN ---
             st.session_state.last_processed_file_id = None
             st.session_state.last_processed_audio_id = None
             st.session_state.captured_image = None
@@ -390,29 +389,32 @@ if username and api_key:
                 with st.spinner("Extracting text to Vault..."):
                     try:
                         extracted_text = ""
-                        # --- FIX 2: REWIND THE FILE POINTER BEFORE READING ---
-                        if file_input: file_input.seek(0)
+                        
+                        # --- THE GEMINI VAULT UPGRADE ---
+                        vault_model = genai.GenerativeModel(model_name=PRIMARY_MODEL)
+                        prompt = "Extract and transcribe all the text, questions, and content from this document accurately."
                         
                         if file_input and file_input.name.lower().endswith('.pdf'):
-                            pdf_reader = PyPDF2.PdfReader(file_input)
-                            for page in range(len(pdf_reader.pages)):
-                                page_text = pdf_reader.pages[page].extract_text()
-                                if page_text:
-                                    extracted_text += f"\n--- PAGE {page + 1} ---\n" + page_text
+                            # Gemini natively reads the PDF perfectly!
+                            pdf_part = {"mime_type": "application/pdf", "data": file_input.getvalue()}
+                            resp = vault_model.generate_content([prompt, pdf_part])
+                            extracted_text = resp.text
                         else:
-                            vault_model = genai.GenerativeModel(model_name=PRIMARY_MODEL)
-                            prompt = "Extract and transcribe all the text and questions from this image accurately."
+                            if file_input: file_input.seek(0)
                             active_img = st.session_state.captured_image if st.session_state.captured_image else Image.open(file_input)
                             resp = vault_model.generate_content([prompt, active_img])
                             extracted_text = resp.text
                             
-                        if len(extracted_text) > 35000:
-                            extracted_text = extracted_text[:35000] + "\n\n[SYSTEM WARNING: Document reached the maximum database size. The end of the document was truncated.]"
-                            
-                        user_data["file_vault"] = extracted_text
-                        save_current_student(username, user_data)
-                        st.sidebar.success("Saved to Vault instantly! You can close the file now.")
-                        st.rerun()
+                        if not extracted_text.strip():
+                            st.sidebar.error("Error: The AI could not extract any text from this file.")
+                        else:
+                            if len(extracted_text) > 35000:
+                                extracted_text = extracted_text[:35000] + "\n\n[SYSTEM WARNING: Document reached the maximum database size. The end of the document was truncated.]"
+                                
+                            user_data["file_vault"] = extracted_text
+                            save_current_student(username, user_data)
+                            st.sidebar.success("Saved to Vault instantly! You can close the file now.")
+                            st.rerun()
                     except Exception as e:
                         st.sidebar.error(f"Error saving to Vault: {e}")
 
@@ -527,7 +529,6 @@ if username and api_key:
             pdf_part = None
             if has_image:
                 try:
-                    # --- FIX 2B: REWIND THE FILE POINTER FOR THE CHAT MODEL TOO ---
                     if file_input: file_input.seek(0)
                     
                     if not isinstance(active_image, Image.Image) and active_image.name.lower().endswith('.pdf'):
