@@ -528,7 +528,11 @@ if username and api_key:
                         current_turn_content.append(pil_image)
                     
                     if image_action == "Review my work for mistakes":
-                        action_prompt = "SYSTEM OVERRIDE: Please review my attached work. Tell me what I did right and help me correct any mistakes one step at a time."
+                        action_prompt = """SYSTEM OVERRIDE: Please review my attached work. 
+                        1. If the attachment is a completed test or worksheet, FIRST give me a clear summary of my overall score (e.g., 'You got 8 out of 10 correct!'). 
+                        2. Praise me for what I got right.
+                        3. THEN, help me correct the ones I got wrong strictly ONE question at a time. Do not just give me the right answers. Use Socratic scaffolding to guide me to the correct answer.
+                        4. If it's not a test, just tell me what I did right and help me correct any mistakes step-by-step."""
                     elif image_action == "Quiz me on this content":
                         action_prompt = "SYSTEM OVERRIDE: Please analyze this attached content. Do not ask if I am ready. IMMEDIATELY ask me the very first diagnostic quiz question strictly based on this material to test my understanding."
                     elif image_action == "Train me for an Exam (AQA Style)":
