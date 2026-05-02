@@ -235,6 +235,11 @@ if username and api_key:
     
     if "user_data" not in st.session_state or st.session_state.get("current_user") != username:
         with st.spinner("Downloading profile..."):
+            # --- FIX 1: WIPE THE GHOST FILE MEMORY ON LOGIN ---
+            st.session_state.last_processed_file_id = None
+            st.session_state.last_processed_audio_id = None
+            st.session_state.captured_image = None
+            
             db = load_data()
             if username not in db:
                 st.session_state.user_data = {"age": None, "history": [], "summary": "New student.", "file_vault": ""}
@@ -385,6 +390,8 @@ if username and api_key:
                 with st.spinner("Extracting text to Vault..."):
                     try:
                         extracted_text = ""
+                        # --- FIX 2: REWIND THE FILE POINTER BEFORE READING ---
+                        if file_input: file_input.seek(0)
                         
                         if file_input and file_input.name.lower().endswith('.pdf'):
                             pdf_reader = PyPDF2.PdfReader(file_input)
@@ -520,6 +527,9 @@ if username and api_key:
             pdf_part = None
             if has_image:
                 try:
+                    # --- FIX 2B: REWIND THE FILE POINTER FOR THE CHAT MODEL TOO ---
+                    if file_input: file_input.seek(0)
+                    
                     if not isinstance(active_image, Image.Image) and active_image.name.lower().endswith('.pdf'):
                         pdf_part = {"mime_type": "application/pdf", "data": active_image.getvalue()}
                         current_turn_content.append(pdf_part)
