@@ -59,7 +59,6 @@ def load_data():
             topic_col = str(row[4]).strip()
             vault_col = str(row[5]).strip() 
             
-            # --- FIX: ALWAYS USE THE LAST/NEWEST ROW IN DB TO PREVENT DUPLICATE BUGS ---
             if name_col:
                 try:
                     hist = json.loads(history_col)
@@ -248,17 +247,13 @@ if username and api_key:
                 saved_topic = db[username].get("last_topic", "a new topic")
                 if saved_topic == "": saved_topic = "a new topic"
                 
-                # --- FIX: DO NOT OVERWRITE EXISTING CHAT HISTORY ON RELOAD ---
+                # --- FIX: SILENTLY RESTORE CHAT IF IT ALREADY EXISTS ---
                 if len(st.session_state.user_data.get("history", [])) == 0:
                     st.session_state.user_data["history"] = [{
                         "role": "model", 
-                        "content": f"Welcome back, {username.title()}! I've reviewed my notes, and it looks like we were working on **{saved_topic}**. Are you ready to pick up exactly where we left off, or do you want to switch topics?"
+                        "content": f"Welcome back, {username.title()}! How can we start today?"
                     }]
-                else:
-                    st.session_state.user_data["history"].append({
-                        "role": "model", 
-                        "content": f"*(Session restored. Continuing with **{saved_topic}**)*"
-                    })
+                # If history > 0, we do nothing and let the chat history display naturally!
             st.session_state.current_user = username
 
     user_data = st.session_state.user_data
