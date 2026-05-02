@@ -3,7 +3,10 @@ import json
 import os
 import google.generativeai as genai
 from PIL import Image
-from gtts import gTTS
+try:
+    from gtts import gTTS
+except ImportError:
+    pass
 import io
 import re
 import gspread
