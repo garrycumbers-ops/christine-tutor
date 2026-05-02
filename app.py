@@ -3,13 +3,13 @@ import json
 import os
 import google.generativeai as genai
 from PIL import Image
-from gtts import gTTS
 import io
 import re
 import gspread
-import PyPDF2
 import threading
 import time
+import asyncio
+import edge_tts
 
 # --- GOOGLE SHEETS ENGINE ---
 @st.cache_resource
@@ -107,6 +107,20 @@ FALLBACK_MODEL = "gemini-2.5-flash-lite"
 api_key = st.secrets.get("GEMINI_API_KEY", None)
 if not api_key:
     api_key = st.sidebar.text_input("Enter Google Gemini API Key", type="password")
+
+# --- EDGE TTS ASYNC WRAPPER ---
+def get_edge_tts_audio(text, voice="en-GB-SoniaNeural"):
+    async def _amain():
+        communicate = edge_tts.Communicate(text, voice)
+        audio_data = bytearray()
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                audio_data.extend(chunk["data"])
+        return bytes(audio_data)
+    
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    return loop.run_until_complete(_amain())
 
 # --- BACKGROUND DOSSIER SAVER (INACTIVITY TIMER) ---
 def background_dossier_save(username, chat_history_str, selected_topic):
@@ -537,7 +551,6 @@ if username and api_key:
                         pil_image = active_image if isinstance(active_image, Image.Image) else Image.open(active_image)
                         current_turn_content.append(pil_image)
                     
-                    # --- FIX: FORTIFIED OVERRIDE PROMPTS ---
                     if image_action == "Review my work for mistakes":
                         action_prompt = """SYSTEM OVERRIDE: Please review my attached work. 
                         1. If the attachment is a completed test or worksheet, FIRST give me a clear summary of my overall score (e.g., 'You got 8 out of 10 correct!'). 
@@ -582,7 +595,6 @@ if username and api_key:
                 pinned_context = raw_history[:2]
                 recent_context = raw_history[-8:]
                 
-                # Check the "deleted middle" for the most recent system override/upload
                 middle_context = raw_history[2:-8]
                 override_msg = None
                 for msg in reversed(middle_context):
@@ -647,12 +659,9 @@ if username and api_key:
                                 clean_speech = re.sub(r'\s+', ' ', clean_speech).strip()
                                 
                                 if clean_speech: 
-                                    sound_file = io.BytesIO()
-                                    tts = gTTS(text=clean_speech, lang='en', tld='co.uk')
-                                    tts.write_to_fp(sound_file)
-                                    sound_file.seek(0)
-                                    
-                                    st.audio(sound_file, format='audio/mpeg', autoplay=True)
+                                    # --- NEW: EDGE-TTS AUDIO INTEGRATION ---
+                                    audio_bytes = get_edge_tts_audio(clean_speech)
+                                    st.audio(audio_bytes, format='audio/mpeg', autoplay=True)
                             except Exception as e:
                                 st.error(f"Audio generation skipped: {e}")
                 
