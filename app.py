@@ -325,16 +325,24 @@ if username and api_key:
         st.sidebar.markdown("---")
         voice_on = st.sidebar.toggle("🔊 Read Christine's answers out loud")
         
-        # --- MASTERY PERCENTAGE TRACKER (BULLETPROOF REGEX FIX) ---
+        # --- MASTERY PERCENTAGE TRACKER (FUZZY LOGIC FIX) ---
         st.sidebar.divider()
         st.sidebar.markdown(f"### 🏆 {selected_topic} Brain Power")
 
         dossier_text = user_data["summary"] if user_data.get("summary") else ""
-        safe_topic = re.escape(selected_topic)
+        
+        # ULTIMATE FIX: Extract alphanumeric words to create a bulletproof fuzzy matcher
+        topic_words = re.findall(r'[A-Za-z0-9]+', selected_topic)
+        if topic_words:
+            # Create a pattern that allows ANY non-alphanumeric characters between words
+            fuzzy_pattern = r'[^A-Za-z0-9]*'.join([rf'\b{w}\b' for w in topic_words])
+            # Search for the topic words, followed by up to 40 characters (excluding '[' to avoid bleeding into other topics), then mastered/gap
+            mastered_count = len(re.findall(rf'{fuzzy_pattern}[^\[]{{0,40}}?mastered', dossier_text, flags=re.IGNORECASE | re.DOTALL))
+            gap_count = len(re.findall(rf'{fuzzy_pattern}[^\[]{{0,40}}?gap', dossier_text, flags=re.IGNORECASE | re.DOTALL))
+        else:
+            mastered_count = 0
+            gap_count = 0
 
-        # Allow for weird AI formatting like [Cells] **MASTERED**:
-        mastered_count = len(re.findall(rf'\[{safe_topic}\][\s\-\*\:]*mastered', dossier_text, re.IGNORECASE))
-        gap_count = len(re.findall(rf'\[{safe_topic}\][\s\-\*\:]*gap', dossier_text, re.IGNORECASE))
         total_tracked = mastered_count + gap_count
 
         if total_tracked > 0:
