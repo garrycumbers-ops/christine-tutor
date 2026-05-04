@@ -330,7 +330,8 @@ if username and api_key:
         st.sidebar.markdown(f"### 🏆 {selected_topic} Brain Power")
 
         dossier_text = user_data["summary"] if user_data.get("summary") else ""
-        
+        safe_topic = re.escape(selected_topic)
+
         # ULTIMATE FIX: Extract alphanumeric words to create a bulletproof fuzzy matcher
         topic_words = re.findall(r'[A-Za-z0-9]+', selected_topic)
         if topic_words:
@@ -578,9 +579,10 @@ if username and api_key:
                         1. Look at the attached document. 
                         2. Before asking your question, you MUST generate a visual aid related to the topic using your Markdown image tools (Rule 9 or Rule 10) and label it '**Figure 1**'. 
                         3. Generate a brand new, realistic exam question based on the document and 'Figure 1' using standard AQA command words. 
-                        4. DO NOT give me the answer. Socratic scaffold my response strictly one step at a time by walking me through the Assessment Objectives (AOs) for this subject. Secure AO1 first."""
+                        4. DO NOT give me the answer. Socratic scaffold my response strictly one step at a time by walking me through the Assessment Objectives (AOs) for this subject. Secure AO1 first.
+                        5. CRITICAL: You must stay in this exam mode. DO NOT switch back to the main topic until the exam question is fully answered and graded."""
                     else:
-                        action_prompt = "SYSTEM OVERRIDE: Please analyze the attached material. Guide me through it step-by-step to improve my core understanding of the concepts. Do not give me the answers. Ask me one thought-provoking question at a time based on this specific text/image."
+                        action_prompt = "SYSTEM OVERRIDE: Please analyze the attached material. Guide me through it step-by-step to improve my core understanding of the concepts. Do not give me the answers. Ask me one thought-provoking question at a time based on this specific text/image. CRITICAL: You must stay in this guided mode. DO NOT switch back to teaching the main subject/topic until we have completely finished going through this entire document."
                         
                     file_label = "📄 Attached PDF" if pdf_part else "📸 Attached Image"
                     display_text += f"\n\n[{file_label}: {action_prompt}]"
