@@ -159,8 +159,13 @@ def background_dossier_save(username, chat_history_str, selected_topic):
         print(f"Background save failed: {e}")
 
 # --- AI BRAIN RULES ---
-def get_system_instruction(age, subject, history_summary, file_vault=""):
-    vault_text = f"\n\nSAVED DOCUMENT VAULT:\nThe student has saved the following document to memory so they don't have to re-upload it. Use this as your primary source material if they ask to continue working on it:\n{file_vault}" if file_vault else ""
+def get_system_instruction(age, subject, history_summary, file_vault="", has_hidden_vault=False):
+    if file_vault:
+        vault_text = f"\n\nSAVED DOCUMENT VAULT:\nThe student has saved the following document to memory so they don't have to re-upload it. Use this as your primary source material if they ask to continue working on it:\n{file_vault}"
+    elif has_hidden_vault:
+        vault_text = "\n\n[SYSTEM NOTE: The student has a large document saved in their Vault, but it is currently TURNED OFF to save memory. If they ask about it, politely instruct them to turn on the '📖 Use Vault Document in Chat' toggle in the sidebar so you can read it!]"
+    else:
+        vault_text = ""
 
     return f"""
     You are "Christine," an empathetic AI Educational Assistant and expert memory coach for students aged 11-18.
@@ -244,6 +249,7 @@ if "captured_image" not in st.session_state: st.session_state.captured_image = N
 if "last_processed_file_id" not in st.session_state: st.session_state.last_processed_file_id = None
 if "unsummarized_messages" not in st.session_state: st.session_state.unsummarized_messages = 0
 if "last_processed_audio_id" not in st.session_state: st.session_state.last_processed_audio_id = None
+if "use_vault" not in st.session_state: st.session_state.use_vault = False
     
 raw_username = st.text_input("Please enter your first name to begin:", key="username_input")
 username = raw_username.strip().lower() if raw_username else ""
@@ -266,9 +272,14 @@ if username and api_key:
                 if saved_topic == "": saved_topic = "a new topic"
                 
                 if len(st.session_state.user_data.get("history", [])) == 0:
+                    if db[username].get("file_vault", "").strip():
+                        welcome_msg = f"Welcome back, {username.title()}! I see you have a document saved in your Vault. If you want to use it today, just turn on **'📖 Use Vault Document in Chat'** in the sidebar. Otherwise, how can we start?"
+                    else:
+                        welcome_msg = f"Welcome back, {username.title()}! How can we start today?"
+                    
                     st.session_state.user_data["history"] = [{
                         "role": "model", 
-                        "content": f"Welcome back, {username.title()}! How can we start today?"
+                        "content": welcome_msg
                     }]
             st.session_state.current_user = username
 
@@ -404,12 +415,16 @@ if username and api_key:
         
         current_vault = user_data.get("file_vault", "")
         if current_vault:
-            st.sidebar.success("✅ A document is saved in memory for this session.")
+            st.sidebar.success("✅ A document is saved in memory.")
+            
+            st.sidebar.toggle("📖 Use Vault Document in Chat", key="use_vault")
+            
             with st.sidebar.expander("View Saved Document"):
                 st.write(current_vault)
             if st.sidebar.button("🗑️ Clear Vault"):
                 user_data["file_vault"] = ""
                 save_current_student(username, user_data)
+                st.session_state.use_vault = False
                 st.rerun()
                 
         elif file_input or st.session_state.captured_image:
@@ -440,6 +455,7 @@ if username and api_key:
                                 
                             user_data["file_vault"] = extracted_text
                             save_current_student(username, user_data)
+                            st.session_state.use_vault = True
                             st.sidebar.success("Saved to Vault instantly! You can close the file now.")
                             st.rerun()
                     except Exception as e:
@@ -628,7 +644,17 @@ if username and api_key:
 
             # --- AI GENERATION ---
             try:
-                system_instruction = get_system_instruction(user_data["age"], current_subject, user_data["summary"], user_data.get("file_vault", ""))
+                is_vault_active = st.session_state.get("use_vault", False)
+                has_vault = bool(user_data.get("file_vault", "").strip())
+                active_vault_content = user_data.get("file_vault", "") if is_vault_active else ""
+                
+                system_instruction = get_system_instruction(
+                    user_data["age"], 
+                    current_subject, 
+                    user_data["summary"], 
+                    file_vault=active_vault_content,
+                    has_hidden_vault=(has_vault and not is_vault_active)
+                )
                 
                 if chat_history and chat_history[0]["role"] != "user":
                     chat_history.insert(0, {"role": "user", "parts": ["Hello"]})
