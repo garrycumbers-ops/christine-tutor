@@ -589,7 +589,8 @@ if username and api_key:
                         4. CRITICAL: You must stay in this review mode. DO NOT switch back to teaching the main subject/topic until every single mistake in this document has been corrected.
                         5. If it's not a test, just tell me what I did right and help me correct any mistakes step-by-step."""
                     elif image_action == "Quiz me on this content":
-                        action_prompt = "SYSTEM OVERRIDE: Please analyze this attached content. Do not ask if I am ready. IMMEDIATELY ask me the very first diagnostic quiz question strictly based on this material to test my understanding. CRITICAL: Do not switch back to the main topic until the quiz is finished."
+                        # FIX: Added strict endless quiz loop instruction
+                        action_prompt = "SYSTEM OVERRIDE: Please analyze this attached content. Do not ask if I am ready. IMMEDIATELY ask me the very first diagnostic quiz question strictly based on this material to test my understanding. CRITICAL: You must stay in this quiz mode. Ask me questions strictly ONE at a time. After I answer, grade it, and immediately ask the NEXT question about this document. DO NOT switch back to the main subject/topic until I explicitly say I am done quizzing."
                     elif image_action == "Train me for an Exam (AQA Style)":
                         action_prompt = f"""SYSTEM OVERRIDE: Act as a strict AQA Examiner for our current subject ({current_subject}). 
                         1. Look at the attached document. 
