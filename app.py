@@ -14,6 +14,7 @@ import threading
 import time
 import asyncio
 import edge_tts
+import base64
 
 # --- GOOGLE SHEETS ENGINE ---
 @st.cache_resource
@@ -131,7 +132,6 @@ def get_edge_tts_audio(text, voice="en-GB-SoniaNeural"):
         audio_data = loop.run_until_complete(_amain())
         loop.close()
 
-    # Isolate the async call in a completely separate thread so Streamlit doesn't panic
     t = threading.Thread(target=run_async_code)
     t.start()
     t.join()
@@ -348,19 +348,16 @@ if username and api_key:
         st.sidebar.markdown("---")
         voice_on = st.sidebar.toggle("🔊 Read Christine's answers out loud")
         
-        # --- MASTERY PERCENTAGE TRACKER (FUZZY LOGIC FIX) ---
+        # --- MASTERY PERCENTAGE TRACKER ---
         st.sidebar.divider()
         st.sidebar.markdown(f"### 🏆 {selected_topic} Brain Power")
 
         dossier_text = user_data["summary"] if user_data.get("summary") else ""
         safe_topic = re.escape(selected_topic)
 
-        # ULTIMATE FIX: Extract alphanumeric words to create a bulletproof fuzzy matcher
         topic_words = re.findall(r'[A-Za-z0-9]+', selected_topic)
         if topic_words:
-            # Create a pattern that allows ANY non-alphanumeric characters between words
             fuzzy_pattern = r'[^A-Za-z0-9]*'.join([rf'\b{w}\b' for w in topic_words])
-            # Search for the topic words, followed by up to 40 characters (excluding '[' to avoid bleeding into other topics), then mastered/gap
             mastered_count = len(re.findall(rf'{fuzzy_pattern}[^\[]{{0,40}}?mastered', dossier_text, flags=re.IGNORECASE | re.DOTALL))
             gap_count = len(re.findall(rf'{fuzzy_pattern}[^\[]{{0,40}}?gap', dossier_text, flags=re.IGNORECASE | re.DOTALL))
         else:
@@ -714,9 +711,10 @@ if username and api_key:
                                 if clean_speech: 
                                     audio_bytes = get_edge_tts_audio(clean_speech)
                                     if audio_bytes:
-                                        # FIX: Package the raw bytes back into a Streamlit-friendly IO object
-                                        sound_file = io.BytesIO(audio_bytes)
-                                        st.audio(sound_file, format='audio/mpeg', autoplay=True)
+                                        # ULTIMATE AUDIO FIX: Base64 HTML injection bypasses Streamlit's buggy audio widget
+                                        b64_audio = base64.b64encode(audio_bytes).decode()
+                                        audio_html = f'<audio autoplay="true"><source src="data:audio/mp3;base64,{b64_audio}" type="audio/mp3"></audio>'
+                                        st.markdown(audio_html, unsafe_allow_html=True)
                                     else:
                                         st.error("Audio generation failed: No voice data returned.")
                             except Exception as e:
