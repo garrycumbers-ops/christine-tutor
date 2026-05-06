@@ -13,8 +13,13 @@ import gspread
 import threading
 import time
 import asyncio
-import edge_tts
-import base64
+
+# Attempt to load edge_tts safely
+try:
+    import edge_tts
+    EDGE_TTS_AVAILABLE = True
+except ImportError:
+    EDGE_TTS_AVAILABLE = False
 
 # --- GOOGLE SHEETS ENGINE ---
 @st.cache_resource
@@ -113,39 +118,50 @@ api_key = st.secrets.get("GEMINI_API_KEY", None)
 if not api_key:
     api_key = st.sidebar.text_input("Enter Google Gemini API Key", type="password")
 
-# --- EDGE TTS ASYNC WRAPPER WITH ROBUST ERROR HANDLING ---
-def get_edge_tts_audio(text, voice="en-GB-SoniaNeural"):
-    result = {"bytes": b"", "error": None}
+# --- ULTIMATE DUAL-ENGINE AUDIO GENERATOR ---
+def generate_audio_bytes(text):
+    '''Tries Edge-TTS first, instantly falls back to gTTS if it fails.'''
     
-    def run_async_code():
-        try:
-            async def _amain():
-                communicate = edge_tts.Communicate(text, voice)
-                audio_data = bytearray()
-                async for chunk in communicate.stream():
-                    if chunk["type"] == "audio":
-                        audio_data.extend(chunk["data"])
-                return bytes(audio_data)
-            
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            result["bytes"] = loop.run_until_complete(_amain())
-            loop.close()
-        except Exception as e:
-            result["error"] = str(e)
+    # Attempt 1: Human Voice (Edge-TTS)
+    if EDGE_TTS_AVAILABLE:
+        result = {"bytes": b"", "error": None}
+        def run_async_code():
+            try:
+                async def _amain():
+                    communicate = edge_tts.Communicate(text, "en-GB-SoniaNeural")
+                    audio_data = bytearray()
+                    async for chunk in communicate.stream():
+                        if chunk["type"] == "audio":
+                            audio_data.extend(chunk["data"])
+                    return bytes(audio_data)
+                
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                result["bytes"] = loop.run_until_complete(_amain())
+                loop.close()
+            except Exception as e:
+                result["error"] = str(e)
 
-    t = threading.Thread(target=run_async_code)
-    t.start()
-    t.join()
-    
-    if result["error"]:
-        raise Exception(result["error"])
+        t = threading.Thread(target=run_async_code)
+        t.start()
+        t.join()
         
-    return result["bytes"]
+        if not result["error"] and result["bytes"]:
+            return result["bytes"]
+
+    # Attempt 2: Robotic Voice Fallback (gTTS)
+    try:
+        tts = gTTS(text=text, lang='en', tld='co.uk')
+        fp = io.BytesIO()
+        tts.write_to_fp(fp)
+        return fp.getvalue()
+    except Exception as e:
+        st.error(f"Total Audio Failure: {e}")
+        return None
 
 # --- BACKGROUND DOSSIER SAVER (INACTIVITY TIMER) ---
 def background_dossier_save(username, chat_history_str, selected_topic):
-    """Runs silently in a background thread when the student stops typing for 5 minutes."""
+    '''Runs silently in a background thread when the student stops typing for 5 minutes.'''
     try:
         db = load_data()
         if username not in db: return
@@ -153,7 +169,7 @@ def background_dossier_save(username, chat_history_str, selected_topic):
         
         summary_model = genai.GenerativeModel(model_name=FALLBACK_MODEL)
         
-        memory_prompt = f"""
+        memory_prompt = f'''
         You are an expert teacher maintaining a highly compressed, long-term dossier on a student.
         CURRENT DOSSIER: {user_data.get('summary', '')}
         RECENT CHAT: {chat_history_str}
@@ -166,7 +182,7 @@ def background_dossier_save(username, chat_history_str, selected_topic):
         3. GAP TAGS: Start new or updated lines with exact format: [{selected_topic}] GAP:
         4. PRUNE: If they master a previous GAP in {selected_topic}, delete that specific GAP tag. 
         5. DOCUMENT PROGRESS: If they are working on a saved document, explicitly state which specific questions or paragraphs they have ALREADY finished.
-        """
+        '''
         response = summary_model.generate_content(memory_prompt)
         user_data["summary"] = response.text.strip()
         
@@ -184,7 +200,7 @@ def get_system_instruction(age, subject, history_summary, file_vault="", has_hid
     else:
         vault_text = ""
 
-    return f"""
+    return f'''
     You are "Christine," an empathetic AI Educational Assistant and expert memory coach for students aged 11-18.
 
     USER PROFILE:
@@ -246,7 +262,7 @@ def get_system_instruction(age, subject, history_summary, file_vault="", has_hid
     2. You must generate the EXACT number of questions requested in a numbered list all at once. Do not ask them one by one.
     3. STOP and wait for the student to answer them.
     4. Grade their answers with "Glow" and "Grow" feedback.
-    """
+    '''
     
 def convert_history_for_gemini(history):
     gemini_history = []
@@ -352,6 +368,7 @@ if username and api_key:
 
         st.sidebar.markdown("---")
         voice_on = st.sidebar.toggle("🔊 Read Christine's answers out loud")
+        st.sidebar.caption("*(Plays when Christine sends a NEW message)*")
         
         # --- MASTERY PERCENTAGE TRACKER (FUZZY LOGIC FIX) ---
         st.sidebar.divider()
@@ -707,22 +724,25 @@ if username and api_key:
                         
                         if voice_on:
                             try:
-                                clean_speech = re.sub(r'!\[.*?\]\(.*?\)', '', answer)
+                                # Strip Markdown formatting before speaking
+                                clean_speech = re.sub(r'!\[.*?\]\((.*?)\)', '', answer)
+                                clean_speech = re.sub(r'\[.*?\]\((.*?)\)', '', clean_speech)
                                 clean_speech = re.sub(r'http[s]?://\S+', '', clean_speech) 
                                 clean_speech = clean_speech.replace('**', '').replace('#', '').replace('`', '').replace('_', '')
                                 clean_speech = re.sub(r'^\s*[\*\-]\s+', ' ', clean_speech, flags=re.MULTILINE)
                                 clean_speech = re.sub(r'\s+', ' ', clean_speech).strip()
                                 
                                 if clean_speech: 
-                                    with st.spinner("Generating voice..."):
-                                        audio_bytes = get_edge_tts_audio(clean_speech)
+                                    with st.spinner("🎙️ Generating voice..."):
+                                        audio_bytes = generate_audio_bytes(clean_speech)
                                     if audio_bytes:
-                                        # RESTORED: Visible player so student can click Play if browser blocks autoplay!
+                                        # VISUAL DIAGNOSTIC ADDED: Will forcibly show the player
                                         st.audio(audio_bytes, format='audio/mp3', autoplay=True)
+                                        st.success("✅ Voice generated successfully! (If it didn't play automatically, your browser blocked it. Click play above!)")
                                     else:
-                                        st.error("Audio generation failed: The TTS server returned 0 bytes.")
+                                        st.error("❌ Audio generation failed entirely.")
                             except Exception as e:
-                                st.error(f"Voice Server Error: {e}")
+                                st.error(f"❌ Voice Server Error: {e}")
                 
                         if st.session_state.captured_image:
                             st.session_state.captured_image = None
