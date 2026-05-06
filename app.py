@@ -110,20 +110,6 @@ api_key = st.secrets.get("GEMINI_API_KEY", None)
 if not api_key:
     api_key = st.sidebar.text_input("Enter Google Gemini API Key", type="password")
 
-# --- PURE gTTS AUDIO GENERATOR ---
-def generate_audio_bytes(text):
-    '''Uses synchronous gTTS. 100% crash proof inside Streamlit.'''
-    try:
-        # Limit text to avoid excessively long audio generation blocking the thread
-        safe_text = text[:1500] 
-        tts = gTTS(text=safe_text, lang='en', tld='co.uk')
-        fp = io.BytesIO()
-        tts.write_to_fp(fp)
-        return fp.getvalue()
-    except Exception as e:
-        st.error(f"Audio Generation Error: {e}")
-        return None
-
 # --- BACKGROUND DOSSIER SAVER (INACTIVITY TIMER) ---
 def background_dossier_save(username, chat_history_str, selected_topic):
     '''Runs silently in a background thread when the student stops typing for 5 minutes.'''
@@ -333,9 +319,8 @@ if username and api_key:
 
         st.sidebar.markdown("---")
         voice_on = st.sidebar.toggle("🔊 Read Christine's answers out loud", key="voice_toggle")
-        st.sidebar.caption("*(Turns on for the next message)*")
         
-        # --- MASTERY PERCENTAGE TRACKER (FUZZY LOGIC FIX) ---
+        # --- MASTERY PERCENTAGE TRACKER ---
         st.sidebar.divider()
         st.sidebar.markdown(f"### 🏆 {selected_topic} Brain Power")
 
@@ -491,11 +476,31 @@ if username and api_key:
                 except Exception as e:
                     st.warning(f"Dossier update skipped. Error: {e}")
 
-        # --- CHAT HISTORY ---
-        for msg in user_data["history"]:
+        # --- CHAT HISTORY & VOICE PLAYBACK BUTTONS ---
+        for i, msg in enumerate(user_data["history"]):
             role_display = "user" if msg["role"] == "user" else "assistant"
             with st.chat_message(role_display):
                 st.markdown(msg["content"])
+                
+                # If voice is toggled on, show a play button under EVERY Christine message
+                if role_display == "assistant" and voice_on:
+                    if st.button("🔊 Play Voice", key=f"btn_voice_{i}"):
+                        clean_speech = re.sub(r'!\[.*?\]\((.*?)\)', '', msg["content"])
+                        clean_speech = re.sub(r'\[.*?\]\((.*?)\)', '', clean_speech)
+                        clean_speech = re.sub(r'http[s]?://\S+', '', clean_speech) 
+                        clean_speech = clean_speech.replace('**', '').replace('#', '').replace('`', '').replace('_', '')
+                        clean_speech = re.sub(r'^\s*[\*\-]\s+', ' ', clean_speech, flags=re.MULTILINE)
+                        clean_speech = re.sub(r'\s+', ' ', clean_speech).strip()
+                        
+                        if clean_speech:
+                            with st.spinner("🎙️ Loading audio..."):
+                                try:
+                                    tts = gTTS(text=clean_speech[:1500], lang='en', tld='co.uk')
+                                    fp = io.BytesIO()
+                                    tts.write_to_fp(fp)
+                                    st.audio(fp.getvalue(), format='audio/mp3', autoplay=True)
+                                except Exception as e:
+                                    st.error(f"Voice generation failed: {e}")
 
         # --- INPUT & PROCESSING ---
         st.markdown("""
@@ -687,12 +692,8 @@ if username and api_key:
                             
                         st.markdown(answer)
                         
-                        # --- THE ULTIMATE AUDIO BLOCK ---
-                        is_voice_on = st.session_state.get("voice_toggle", False)
-                        if is_voice_on:
-                            st.info("Debugging Audio... Checking text.")
+                        if voice_on:
                             try:
-                                # Strip Markdown formatting before speaking
                                 clean_speech = re.sub(r'!\[.*?\]\((.*?)\)', '', answer)
                                 clean_speech = re.sub(r'\[.*?\]\((.*?)\)', '', clean_speech)
                                 clean_speech = re.sub(r'http[s]?://\S+', '', clean_speech) 
@@ -701,19 +702,13 @@ if username and api_key:
                                 clean_speech = re.sub(r'\s+', ' ', clean_speech).strip()
                                 
                                 if clean_speech: 
-                                    st.info("Debugging Audio... Text cleaned. Generating audio bytes.")
                                     with st.spinner("🎙️ Generating voice..."):
-                                        audio_bytes = generate_audio_bytes(clean_speech)
-                                        
-                                    if audio_bytes:
-                                        st.success("✅ Voice generated! Rendering player...")
-                                        st.audio(audio_bytes, format='audio/mp3', autoplay=True)
-                                    else:
-                                        st.error("❌ Audio generation returned None. gTTS failed to create bytes.")
-                                else:
-                                    st.warning("⚠️ No valid text left to speak after cleaning.")
+                                        tts = gTTS(text=clean_speech[:1500], lang='en', tld='co.uk')
+                                        fp = io.BytesIO()
+                                        tts.write_to_fp(fp)
+                                        st.audio(fp.getvalue(), format='audio/mp3', autoplay=True)
                             except Exception as e:
-                                st.error(f"❌ Voice Output Error: {e}")
+                                st.error(f"Voice Server Error: {e}")
                 
                         if st.session_state.captured_image:
                             st.session_state.captured_image = None
