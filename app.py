@@ -355,7 +355,7 @@ if username and api_key:
         voice_on = st.sidebar.toggle("🔊 Read Christine's answers out loud")
         st.sidebar.caption("*(Turns on for the next message)*")
         
-        # --- MASTERY PERCENTAGE TRACKER (FUZZY LOGIC FIX) ---
+        # --- MASTERY PERCENTAGE TRACKER ---
         st.sidebar.divider()
         st.sidebar.markdown(f"### 🏆 {selected_topic} Brain Power")
 
@@ -364,7 +364,7 @@ if username and api_key:
 
         topic_words = re.findall(r'[A-Za-z0-9]+', selected_topic)
         if topic_words:
-            fuzzy_pattern = r'[^A-Za-z0-9]*'.join([rf'\b{w}\b' for w in topic_words])
+            fuzzy_pattern = r'[^A-Za-z0-9]*'.join([rf'{w}' for w in topic_words])
             mastered_count = len(re.findall(rf'{fuzzy_pattern}[^\[]{{0,40}}?mastered', dossier_text, flags=re.IGNORECASE | re.DOTALL))
             gap_count = len(re.findall(rf'{fuzzy_pattern}[^\[]{{0,40}}?gap', dossier_text, flags=re.IGNORECASE | re.DOTALL))
         else:
