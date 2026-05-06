@@ -113,30 +113,35 @@ api_key = st.secrets.get("GEMINI_API_KEY", None)
 if not api_key:
     api_key = st.sidebar.text_input("Enter Google Gemini API Key", type="password")
 
-# --- EDGE TTS ASYNC WRAPPER (THREAD-SAFE ISOLATION) ---
+# --- EDGE TTS ASYNC WRAPPER WITH ROBUST ERROR HANDLING ---
 def get_edge_tts_audio(text, voice="en-GB-SoniaNeural"):
-    audio_data = b""
+    result = {"bytes": b"", "error": None}
     
     def run_async_code():
-        nonlocal audio_data
-        async def _amain():
-            communicate = edge_tts.Communicate(text, voice)
-            data = b""
-            async for chunk in communicate.stream():
-                if chunk["type"] == "audio":
-                    data += chunk["data"]
-            return data
-        
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        audio_data = loop.run_until_complete(_amain())
-        loop.close()
+        try:
+            async def _amain():
+                communicate = edge_tts.Communicate(text, voice)
+                audio_data = bytearray()
+                async for chunk in communicate.stream():
+                    if chunk["type"] == "audio":
+                        audio_data.extend(chunk["data"])
+                return bytes(audio_data)
+            
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result["bytes"] = loop.run_until_complete(_amain())
+            loop.close()
+        except Exception as e:
+            result["error"] = str(e)
 
     t = threading.Thread(target=run_async_code)
     t.start()
     t.join()
     
-    return audio_data
+    if result["error"]:
+        raise Exception(result["error"])
+        
+    return result["bytes"]
 
 # --- BACKGROUND DOSSIER SAVER (INACTIVITY TIMER) ---
 def background_dossier_save(username, chat_history_str, selected_topic):
@@ -348,7 +353,7 @@ if username and api_key:
         st.sidebar.markdown("---")
         voice_on = st.sidebar.toggle("🔊 Read Christine's answers out loud")
         
-        # --- MASTERY PERCENTAGE TRACKER ---
+        # --- MASTERY PERCENTAGE TRACKER (FUZZY LOGIC FIX) ---
         st.sidebar.divider()
         st.sidebar.markdown(f"### 🏆 {selected_topic} Brain Power")
 
@@ -709,16 +714,15 @@ if username and api_key:
                                 clean_speech = re.sub(r'\s+', ' ', clean_speech).strip()
                                 
                                 if clean_speech: 
-                                    audio_bytes = get_edge_tts_audio(clean_speech)
+                                    with st.spinner("Generating voice..."):
+                                        audio_bytes = get_edge_tts_audio(clean_speech)
                                     if audio_bytes:
-                                        # ULTIMATE AUDIO FIX: Base64 HTML injection bypasses Streamlit's buggy audio widget
-                                        b64_audio = base64.b64encode(audio_bytes).decode()
-                                        audio_html = f'<audio autoplay="true"><source src="data:audio/mp3;base64,{b64_audio}" type="audio/mp3"></audio>'
-                                        st.markdown(audio_html, unsafe_allow_html=True)
+                                        # RESTORED: Visible player so student can click Play if browser blocks autoplay!
+                                        st.audio(audio_bytes, format='audio/mp3', autoplay=True)
                                     else:
-                                        st.error("Audio generation failed: No voice data returned.")
+                                        st.error("Audio generation failed: The TTS server returned 0 bytes.")
                             except Exception as e:
-                                st.error(f"Audio generation skipped: {e}")
+                                st.error(f"Voice Server Error: {e}")
                 
                         if st.session_state.captured_image:
                             st.session_state.captured_image = None
@@ -734,7 +738,7 @@ if username and api_key:
                 st.session_state.dossier_timer = threading.Timer(
                     300.0, 
                     background_dossier_save, 
-                    args=[username, str(optimized_raw_history), selected_topic] # FIX: Passes strictly the Topic!
+                    args=[username, str(optimized_raw_history), selected_topic]
                 )
                 st.session_state.dossier_timer.start()
 
