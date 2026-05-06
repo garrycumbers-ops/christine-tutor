@@ -12,16 +12,6 @@ import re
 import gspread
 import threading
 import time
-import subprocess
-import tempfile
-import sys
-
-# Attempt to load edge_tts safely
-try:
-    import edge_tts
-    EDGE_TTS_AVAILABLE = True
-except ImportError:
-    EDGE_TTS_AVAILABLE = False
 
 # --- GOOGLE SHEETS ENGINE ---
 @st.cache_resource
@@ -120,60 +110,18 @@ api_key = st.secrets.get("GEMINI_API_KEY", None)
 if not api_key:
     api_key = st.sidebar.text_input("Enter Google Gemini API Key", type="password")
 
-# --- ZERO-ASYNC SUBPROCESS AUDIO GENERATOR ---
+# --- PURE gTTS AUDIO GENERATOR ---
 def generate_audio_bytes(text):
-    '''Tries Edge-TTS CLI directly via OS to avoid Streamlit threading issues, instantly falls back to gTTS if it fails.'''
-    error_logs = []
-    
+    '''Uses synchronous gTTS. 100% crash proof inside Streamlit.'''
     try:
-        import uuid
-        txt_path = f"temp_{uuid.uuid4().hex}.txt"
-        mp3_path = f"temp_{uuid.uuid4().hex}.mp3"
-        
-        # Prevent massive payloads from freezing the server
-        safe_text = text[:1500]
-        
-        with open(txt_path, "w", encoding="utf-8") as f:
-            f.write(safe_text)
-            
-        # Run the edge-tts command safely as a module to avoid PATH issues
-        result = subprocess.run(
-            [sys.executable, "-m", "edge_tts", "-f", txt_path, "--voice", "en-GB-SoniaNeural", "--write-media", mp3_path], 
-            capture_output=True, text=True, timeout=15
-        )
-        
-        if result.returncode == 0 and os.path.exists(mp3_path):
-            with open(mp3_path, "rb") as f:
-                audio_data = f.read()
-            
-            try:
-                os.remove(txt_path)
-                os.remove(mp3_path)
-            except:
-                pass
-                
-            if len(audio_data) > 0:
-                return audio_data
-        else:
-            error_logs.append(f"Edge-TTS CLI Error: {result.stderr}")
-            
-    except Exception as e:
-        error_logs.append(f"Edge-TTS Exception: {e}")
-        try:
-            if os.path.exists(txt_path): os.remove(txt_path)
-            if os.path.exists(mp3_path): os.remove(mp3_path)
-        except:
-            pass
-
-    # Fallback to gTTS if edge-tts is missing or blocked
-    try:
-        tts = gTTS(text=text[:1500], lang='en', tld='co.uk')
+        # Limit text to avoid excessively long audio generation blocking the thread
+        safe_text = text[:1500] 
+        tts = gTTS(text=safe_text, lang='en', tld='co.uk')
         fp = io.BytesIO()
         tts.write_to_fp(fp)
         return fp.getvalue()
-    except Exception as e_fallback:
-        error_logs.append(f"gTTS Error: {e_fallback}")
-        st.error(f"Total Audio Failure:\n" + "\n".join(error_logs))
+    except Exception as e:
+        st.error(f"Audio Generation Error: {e}")
         return None
 
 # --- BACKGROUND DOSSIER SAVER (INACTIVITY TIMER) ---
@@ -384,9 +332,8 @@ if username and api_key:
                 st.rerun()
 
         st.sidebar.markdown("---")
-        # Ensure voice toggle state persists directly to session state
         voice_on = st.sidebar.toggle("🔊 Read Christine's answers out loud", key="voice_toggle")
-        st.sidebar.caption("*(Voice generates ONLY for new messages)*")
+        st.sidebar.caption("*(Turns on for the next message)*")
         
         # --- MASTERY PERCENTAGE TRACKER (FUZZY LOGIC FIX) ---
         st.sidebar.divider()
@@ -740,10 +687,10 @@ if username and api_key:
                             
                         st.markdown(answer)
                         
-                        # FORCE FETCH THE TOGGLE STATE DIRECTLY
+                        # --- THE ULTIMATE AUDIO BLOCK ---
                         is_voice_on = st.session_state.get("voice_toggle", False)
-                        
                         if is_voice_on:
+                            st.info("Debugging Audio... Checking text.")
                             try:
                                 # Strip Markdown formatting before speaking
                                 clean_speech = re.sub(r'!\[.*?\]\((.*?)\)', '', answer)
@@ -754,16 +701,19 @@ if username and api_key:
                                 clean_speech = re.sub(r'\s+', ' ', clean_speech).strip()
                                 
                                 if clean_speech: 
+                                    st.info("Debugging Audio... Text cleaned. Generating audio bytes.")
                                     with st.spinner("🎙️ Generating voice..."):
                                         audio_bytes = generate_audio_bytes(clean_speech)
                                         
                                     if audio_bytes:
+                                        st.success("✅ Voice generated! Rendering player...")
                                         st.audio(audio_bytes, format='audio/mp3', autoplay=True)
-                                        st.success("✅ Voice generated! (Click play if your browser blocked autoplay!)")
                                     else:
-                                        st.error("❌ Audio generation failed entirely. Check errors above.")
+                                        st.error("❌ Audio generation returned None. gTTS failed to create bytes.")
+                                else:
+                                    st.warning("⚠️ No valid text left to speak after cleaning.")
                             except Exception as e:
-                                st.error(f"❌ Voice Server Error: {e}")
+                                st.error(f"❌ Voice Output Error: {e}")
                 
                         if st.session_state.captured_image:
                             st.session_state.captured_image = None
