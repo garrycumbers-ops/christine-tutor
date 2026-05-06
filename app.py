@@ -14,6 +14,14 @@ import threading
 import time
 import subprocess
 import tempfile
+import sys
+
+# Attempt to load edge_tts safely
+try:
+    import edge_tts
+    EDGE_TTS_AVAILABLE = True
+except ImportError:
+    EDGE_TTS_AVAILABLE = False
 
 # --- GOOGLE SHEETS ENGINE ---
 @st.cache_resource
@@ -115,6 +123,8 @@ if not api_key:
 # --- ZERO-ASYNC SUBPROCESS AUDIO GENERATOR ---
 def generate_audio_bytes(text):
     '''Tries Edge-TTS CLI directly via OS to avoid Streamlit threading issues, instantly falls back to gTTS if it fails.'''
+    error_logs = []
+    
     try:
         # 1. Write the text to a temporary file
         with tempfile.NamedTemporaryFile(suffix=".txt", delete=False, mode="w", encoding="utf-8") as f_txt:
@@ -124,39 +134,40 @@ def generate_audio_bytes(text):
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f_mp3:
             mp3_path = f_mp3.name
             
-        # 2. Run the edge-tts command directly on the OS
-        result = subprocess.run(["edge-tts", "-f", txt_path, "--voice", "en-GB-SoniaNeural", "--write-media", mp3_path], capture_output=True, text=True)
+        # 2. Run the edge-tts command safely as a module to avoid PATH issues
+        result = subprocess.run(
+            [sys.executable, "-m", "edge_tts", "-f", txt_path, "--voice", "en-GB-SoniaNeural", "--write-media", mp3_path], 
+            capture_output=True, text=True
+        )
         
-        if result.returncode != 0:
-            raise Exception(f"CLI Error: {result.stderr}")
+        if result.returncode == 0:
+            with open(mp3_path, "rb") as f:
+                audio_data = f.read()
             
-        # 3. Read the pure MP3 bytes back into Streamlit
-        with open(mp3_path, "rb") as f:
-            audio_data = f.read()
-            
-        # Clean up
-        try:
-            os.remove(txt_path)
-            os.remove(mp3_path)
-        except:
-            pass
-            
-        if len(audio_data) > 0:
-            return audio_data
+            try:
+                os.remove(txt_path)
+                os.remove(mp3_path)
+            except:
+                pass
+                
+            if len(audio_data) > 0:
+                return audio_data
         else:
-            raise Exception("Generated audio file is empty.")
+            error_logs.append(f"Edge-TTS CLI Error: {result.stderr}")
             
     except Exception as e:
-        print(f"Edge-TTS Failed: {e}")
-        # 4. Fallback to gTTS if edge-tts is missing or blocked
-        try:
-            tts = gTTS(text=text, lang='en', tld='co.uk')
-            fp = io.BytesIO()
-            tts.write_to_fp(fp)
-            return fp.getvalue()
-        except Exception as e_fallback:
-            st.error(f"Total Audio Failure: {e_fallback}")
-            return None
+        error_logs.append(f"Edge-TTS Thread Error: {e}")
+
+    # 4. Fallback to gTTS if edge-tts is missing or blocked
+    try:
+        tts = gTTS(text=text, lang='en', tld='co.uk')
+        fp = io.BytesIO()
+        tts.write_to_fp(fp)
+        return fp.getvalue()
+    except Exception as e_fallback:
+        error_logs.append(f"gTTS Error: {e_fallback}")
+        st.error(f"Total Audio Failure:\n" + "\n".join(error_logs))
+        return None
 
 # --- BACKGROUND DOSSIER SAVER (INACTIVITY TIMER) ---
 def background_dossier_save(username, chat_history_str, selected_topic):
@@ -736,11 +747,11 @@ if username and api_key:
                                         audio_bytes = generate_audio_bytes(clean_speech)
                                         
                                     if audio_bytes:
-                                        # Use standard streamlit component to guarantee player renders
+                                        # Use standard streamlit audio player for guaranteed rendering
                                         st.audio(audio_bytes, format='audio/mp3', autoplay=True)
-                                        st.success("✅ Voice generated successfully! (Click play if your browser blocked autoplay!)")
+                                        st.success("✅ Voice generated! (Click play if your browser blocked autoplay!)")
                                     else:
-                                        st.error("❌ Audio generation failed. Reverting to text-only mode.")
+                                        st.error("❌ Audio generation failed entirely. Check errors above.")
                             except Exception as e:
                                 st.error(f"❌ Voice Server Error: {e}")
                 
