@@ -112,19 +112,31 @@ api_key = st.secrets.get("GEMINI_API_KEY", None)
 if not api_key:
     api_key = st.sidebar.text_input("Enter Google Gemini API Key", type="password")
 
-# --- EDGE TTS ASYNC WRAPPER ---
+# --- EDGE TTS ASYNC WRAPPER (THREAD-SAFE ISOLATION) ---
 def get_edge_tts_audio(text, voice="en-GB-SoniaNeural"):
-    async def _amain():
-        communicate = edge_tts.Communicate(text, voice)
-        audio_data = bytearray()
-        async for chunk in communicate.stream():
-            if chunk["type"] == "audio":
-                audio_data.extend(chunk["data"])
-        return bytes(audio_data)
+    audio_data = b""
     
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    return loop.run_until_complete(_amain())
+    def run_async_code():
+        nonlocal audio_data
+        async def _amain():
+            communicate = edge_tts.Communicate(text, voice)
+            data = b""
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    data += chunk["data"]
+            return data
+        
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        audio_data = loop.run_until_complete(_amain())
+        loop.close()
+
+    # Isolate the async call in a completely separate thread so Streamlit doesn't panic
+    t = threading.Thread(target=run_async_code)
+    t.start()
+    t.join()
+    
+    return audio_data
 
 # --- BACKGROUND DOSSIER SAVER (INACTIVITY TIMER) ---
 def background_dossier_save(username, chat_history_str, selected_topic):
@@ -589,7 +601,6 @@ if username and api_key:
                         4. CRITICAL: You must stay in this review mode. DO NOT switch back to teaching the main subject/topic until every single mistake in this document has been corrected.
                         5. If it's not a test, just tell me what I did right and help me correct any mistakes step-by-step."""
                     elif image_action == "Quiz me on this content":
-                        # FIX: Added strict endless quiz loop instruction
                         action_prompt = "SYSTEM OVERRIDE: Please analyze this attached content. Do not ask if I am ready. IMMEDIATELY ask me the very first diagnostic quiz question strictly based on this material to test my understanding. CRITICAL: You must stay in this quiz mode. Ask me questions strictly ONE at a time. After I answer, grade it, and immediately ask the NEXT question about this document. DO NOT switch back to the main subject/topic until I explicitly say I am done quizzing."
                     elif image_action == "Train me for an Exam (AQA Style)":
                         action_prompt = f"""SYSTEM OVERRIDE: Act as a strict AQA Examiner for our current subject ({current_subject}). 
@@ -702,7 +713,12 @@ if username and api_key:
                                 
                                 if clean_speech: 
                                     audio_bytes = get_edge_tts_audio(clean_speech)
-                                    st.audio(audio_bytes, format='audio/mpeg', autoplay=True)
+                                    if audio_bytes:
+                                        # FIX: Package the raw bytes back into a Streamlit-friendly IO object
+                                        sound_file = io.BytesIO(audio_bytes)
+                                        st.audio(sound_file, format='audio/mpeg', autoplay=True)
+                                    else:
+                                        st.error("Audio generation failed: No voice data returned.")
                             except Exception as e:
                                 st.error(f"Audio generation skipped: {e}")
                 
