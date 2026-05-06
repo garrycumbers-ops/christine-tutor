@@ -743,15 +743,15 @@ if username and api_key:
                                 clean_speech = re.sub(r'\s+', ' ', clean_speech).strip()
                                 
                                 if clean_speech: 
-                                    with st.spinner("🎙️ Generating voice..."):
+                                    with st.spinner("🎙️ Generating voice player..."):
                                         audio_bytes = generate_audio_bytes(clean_speech)
                                         
                                     if audio_bytes:
-                                        # Use standard streamlit audio player for guaranteed rendering
+                                        # Use standard streamlit component to guarantee player renders
                                         st.audio(audio_bytes, format='audio/mp3', autoplay=True)
-                                        st.success("✅ Voice generated! (Click play if your browser blocked autoplay!)")
+                                        st.success("✅ Voice generated successfully! (Click play if your browser blocked autoplay!)")
                                     else:
-                                        st.error("❌ Audio generation failed entirely. Check errors above.")
+                                        st.error("❌ Audio generation failed entirely.")
                             except Exception as e:
                                 st.error(f"❌ Voice Server Error: {e}")
                 
