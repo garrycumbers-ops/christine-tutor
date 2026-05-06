@@ -165,7 +165,7 @@ def generate_audio_bytes(text):
         except:
             pass
 
-    # 4. Fallback to gTTS if edge-tts is missing or blocked
+    # Fallback to gTTS if edge-tts is missing or blocked
     try:
         tts = gTTS(text=text[:1500], lang='en', tld='co.uk')
         fp = io.BytesIO()
@@ -384,9 +384,9 @@ if username and api_key:
                 st.rerun()
 
         st.sidebar.markdown("---")
-        # FIXED: We check this toggle immediately!
+        # Ensure voice toggle state persists directly to session state
         voice_on = st.sidebar.toggle("🔊 Read Christine's answers out loud", key="voice_toggle")
-        st.sidebar.caption("*(Turns on for the next message)*")
+        st.sidebar.caption("*(Voice generates ONLY for new messages)*")
         
         # --- MASTERY PERCENTAGE TRACKER (FUZZY LOGIC FIX) ---
         st.sidebar.divider()
@@ -397,7 +397,7 @@ if username and api_key:
 
         topic_words = re.findall(r'[A-Za-z0-9]+', selected_topic)
         if topic_words:
-            fuzzy_pattern = r'[^A-Za-z0-9]*'.join([rf'\b{w}\b' for w in topic_words])
+            fuzzy_pattern = r'[^A-Za-z0-9]*'.join([rf'{w}' for w in topic_words])
             mastered_count = len(re.findall(rf'{fuzzy_pattern}[^\[]{{0,40}}?mastered', dossier_text, flags=re.IGNORECASE | re.DOTALL))
             gap_count = len(re.findall(rf'{fuzzy_pattern}[^\[]{{0,40}}?gap', dossier_text, flags=re.IGNORECASE | re.DOTALL))
         else:
@@ -740,7 +740,10 @@ if username and api_key:
                             
                         st.markdown(answer)
                         
-                        if st.session_state.get("voice_toggle", False):
+                        # FORCE FETCH THE TOGGLE STATE DIRECTLY
+                        is_voice_on = st.session_state.get("voice_toggle", False)
+                        
+                        if is_voice_on:
                             try:
                                 # Strip Markdown formatting before speaking
                                 clean_speech = re.sub(r'!\[.*?\]\((.*?)\)', '', answer)
