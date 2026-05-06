@@ -3,10 +3,7 @@ import json
 import os
 import google.generativeai as genai
 from PIL import Image
-try:
-    from gtts import gTTS
-except ImportError:
-    pass
+from gtts import gTTS
 import io
 import re
 import gspread
@@ -109,6 +106,27 @@ FALLBACK_MODEL = "gemini-2.5-flash-lite"
 api_key = st.secrets.get("GEMINI_API_KEY", None)
 if not api_key:
     api_key = st.sidebar.text_input("Enter Google Gemini API Key", type="password")
+
+# --- PURE gTTS AUDIO GENERATOR ---
+def generate_audio_bytes(text):
+    '''Uses synchronous gTTS. 100% crash proof inside Streamlit.'''
+    try:
+        safe_text = text[:1500] 
+        tts = gTTS(text=safe_text, lang='en', tld='co.uk')
+        fp = io.BytesIO()
+        tts.write_to_fp(fp)
+        return fp.getvalue()
+    except Exception as e:
+        st.error(f"Audio Generation Error: {e}")
+        return None
+
+def clean_text_for_speech(text):
+    clean_speech = re.sub(r'!\[.*?\]\((.*?)\)', '', text)
+    clean_speech = re.sub(r'\[.*?\]\((.*?)\)', '', clean_speech)
+    clean_speech = re.sub(r'http[s]?://\S+', '', clean_speech) 
+    clean_speech = clean_speech.replace('**', '').replace('#', '').replace('`', '').replace('_', '')
+    clean_speech = re.sub(r'^\s*[\*\-]\s+', ' ', clean_speech, flags=re.MULTILINE)
+    return re.sub(r'\s+', ' ', clean_speech).strip()
 
 # --- BACKGROUND DOSSIER SAVER (INACTIVITY TIMER) ---
 def background_dossier_save(username, chat_history_str, selected_topic):
@@ -234,6 +252,10 @@ if "last_processed_file_id" not in st.session_state: st.session_state.last_proce
 if "unsummarized_messages" not in st.session_state: st.session_state.unsummarized_messages = 0
 if "last_processed_audio_id" not in st.session_state: st.session_state.last_processed_audio_id = None
 if "use_vault" not in st.session_state: st.session_state.use_vault = False
+
+# Safely initialize the auto_play_text tracker
+if "auto_play_text" not in st.session_state:
+    st.session_state.auto_play_text = None
     
 raw_username = st.text_input("Please enter your first name to begin:", key="username_input")
 username = raw_username.strip().lower() if raw_username else ""
@@ -318,8 +340,6 @@ if username and api_key:
                 st.rerun()
 
         st.sidebar.markdown("---")
-        
-        # NOTE: WE READ THE TOGGLE ONCE AT THE START OF THE RUN
         voice_on = st.sidebar.toggle("🔊 Read Christine's answers out loud", key="voice_toggle")
         
         # --- MASTERY PERCENTAGE TRACKER ---
@@ -478,31 +498,32 @@ if username and api_key:
                 except Exception as e:
                     st.warning(f"Dossier update skipped. Error: {e}")
 
-        # --- CHAT HISTORY ---
+        # --- CHAT HISTORY & VOICE PLAYBACK BUTTONS ---
         for i, msg in enumerate(user_data["history"]):
             role_display = "user" if msg["role"] == "user" else "assistant"
             with st.chat_message(role_display):
                 st.markdown(msg["content"])
                 
-                # REVEAL PLAY BUTTONS IF VOICE MODE IS ON
+                # Render history voice buttons inline if toggle is on
                 if role_display == "assistant" and voice_on:
                     if st.button("🔊 Play Voice", key=f"btn_hist_{i}"):
-                        clean_speech = re.sub(r'!\[.*?\]\((.*?)\)', '', msg["content"])
-                        clean_speech = re.sub(r'\[.*?\]\((.*?)\)', '', clean_speech)
-                        clean_speech = re.sub(r'http[s]?://\S+', '', clean_speech) 
-                        clean_speech = clean_speech.replace('**', '').replace('#', '').replace('`', '').replace('_', '')
-                        clean_speech = re.sub(r'^\s*[\*\-]\s+', ' ', clean_speech, flags=re.MULTILINE)
-                        clean_speech = re.sub(r'\s+', ' ', clean_speech).strip()
-                        
-                        if clean_speech:
-                            with st.spinner("🎙️ Loading audio..."):
-                                try:
-                                    tts = gTTS(text=clean_speech[:1500], lang='en', tld='co.uk')
-                                    fp = io.BytesIO()
-                                    tts.write_to_fp(fp)
-                                    st.audio(fp.getvalue(), format='audio/mp3', autoplay=True)
-                                except Exception as e:
-                                    st.error(f"Voice generation failed: {e}")
+                        st.session_state.auto_play_text = msg["content"]
+
+        # --- THE MAGIC AUDIO PLAYER BLOCK ---
+        # This sits right below the chat history and executes perfectly on the rerender!
+        if st.session_state.get("auto_play_text"):
+            text_to_speak = clean_text_for_speech(st.session_state.auto_play_text)
+            if text_to_speak:
+                with st.spinner("🎙️ Generating voice..."):
+                    audio_bytes = generate_audio_bytes(text_to_speak)
+                    if audio_bytes:
+                        st.audio(audio_bytes, format='audio/mp3', autoplay=True)
+                        st.success("✅ Voice generated! (Click play on the widget above if your browser blocks autoplay)")
+                    else:
+                        st.error("Audio generation failed.")
+            
+            # Clear the state so it doesn't play again endlessly on the next page interaction
+            st.session_state.auto_play_text = None
 
         # --- INPUT & PROCESSING ---
         st.markdown("""
@@ -692,12 +713,13 @@ if username and api_key:
                         if not answer:
                             answer = "I'm sorry, I had trouble processing that. Could you try asking again?"
                             
-                        st.markdown(answer)
-                
                 user_data["history"].append({"role": "model", "content": answer})
                 save_current_student(username, user_data)
                 st.session_state.unsummarized_messages += 2
                 
+                if voice_on:
+                    st.session_state.auto_play_text = answer
+
                 if st.session_state.captured_image:
                     st.session_state.captured_image = None
 
@@ -712,7 +734,7 @@ if username and api_key:
                 )
                 st.session_state.dossier_timer.start()
 
-                # ONLY ONE PLACE RENDERS VOICE. WE FORCE A REFRESH SO IT IS HANDLED BY THE HISTORY LOOP.
+                # FORCE A RERUN SO THE NEW MESSAGE ENTERS HISTORY LOOP AND THE PLAYER IS DRAWN SAFELY
                 st.rerun()
 
             except Exception as e:
