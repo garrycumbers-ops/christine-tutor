@@ -12,16 +12,8 @@ import re
 import gspread
 import threading
 import time
-import asyncio
-import base64
-import streamlit.components.v1 as components
-
-# Attempt to load edge_tts safely
-try:
-    import edge_tts
-    EDGE_TTS_AVAILABLE = True
-except ImportError:
-    EDGE_TTS_AVAILABLE = False
+import subprocess
+import tempfile
 
 # --- GOOGLE SHEETS ENGINE ---
 @st.cache_resource
@@ -120,29 +112,51 @@ api_key = st.secrets.get("GEMINI_API_KEY", None)
 if not api_key:
     api_key = st.sidebar.text_input("Enter Google Gemini API Key", type="password")
 
-# --- HTML AUDIO GENERATOR FIX ---
-def get_html_audio_player(text):
-    '''Uses native browser Web Speech API. 100% crash proof and avoids Streamlit widgets entirely.'''
-    safe_text = text.replace("'", "\'").replace('"', '\"').replace('\n', ' ')
-    html_code = f'''
-    <div style="padding: 10px; background-color: #f0f2f6; border-radius: 5px; margin-top: 10px;">
-        <button onclick="speakText()" style="background-color: #4CAF50; border: none; color: white; padding: 10px 20px; text-align: center; text-decoration: none; display: inline-block; font-size: 16px; margin: 4px 2px; cursor: pointer; border-radius: 5px;">▶️ Play Christine's Voice</button>
-        <button onclick="stopText()" style="background-color: #f44336; border: none; color: white; padding: 10px 20px; text-align: center; text-decoration: none; display: inline-block; font-size: 16px; margin: 4px 2px; cursor: pointer; border-radius: 5px;">⏹️ Stop</button>
-        <script>
-            function speakText() {{
-                window.speechSynthesis.cancel();
-                let utterance = new SpeechSynthesisUtterance('{safe_text}');
-                utterance.lang = 'en-GB'; 
-                utterance.rate = 1.0;
-                window.speechSynthesis.speak(utterance);
-            }}
-            function stopText() {{
-                window.speechSynthesis.cancel();
-            }}
-        </script>
-    </div>
-    '''
-    return html_code
+# --- ZERO-ASYNC SUBPROCESS AUDIO GENERATOR ---
+def generate_audio_bytes(text):
+    '''Tries Edge-TTS CLI directly via OS to avoid Streamlit threading issues, instantly falls back to gTTS if it fails.'''
+    try:
+        # 1. Write the text to a temporary file
+        with tempfile.NamedTemporaryFile(suffix=".txt", delete=False, mode="w", encoding="utf-8") as f_txt:
+            f_txt.write(text)
+            txt_path = f_txt.name
+            
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f_mp3:
+            mp3_path = f_mp3.name
+            
+        # 2. Run the edge-tts command directly on the OS
+        result = subprocess.run(["edge-tts", "-f", txt_path, "--voice", "en-GB-SoniaNeural", "--write-media", mp3_path], capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            raise Exception(f"CLI Error: {result.stderr}")
+            
+        # 3. Read the pure MP3 bytes back into Streamlit
+        with open(mp3_path, "rb") as f:
+            audio_data = f.read()
+            
+        # Clean up
+        try:
+            os.remove(txt_path)
+            os.remove(mp3_path)
+        except:
+            pass
+            
+        if len(audio_data) > 0:
+            return audio_data
+        else:
+            raise Exception("Generated audio file is empty.")
+            
+    except Exception as e:
+        print(f"Edge-TTS Failed: {e}")
+        # 4. Fallback to gTTS if edge-tts is missing or blocked
+        try:
+            tts = gTTS(text=text, lang='en', tld='co.uk')
+            fp = io.BytesIO()
+            tts.write_to_fp(fp)
+            return fp.getvalue()
+        except Exception as e_fallback:
+            st.error(f"Total Audio Failure: {e_fallback}")
+            return None
 
 # --- BACKGROUND DOSSIER SAVER (INACTIVITY TIMER) ---
 def background_dossier_save(username, chat_history_str, selected_topic):
@@ -355,7 +369,7 @@ if username and api_key:
         voice_on = st.sidebar.toggle("🔊 Read Christine's answers out loud")
         st.sidebar.caption("*(Turns on for the next message)*")
         
-        # --- MASTERY PERCENTAGE TRACKER ---
+        # --- MASTERY PERCENTAGE TRACKER (FUZZY LOGIC FIX) ---
         st.sidebar.divider()
         st.sidebar.markdown(f"### 🏆 {selected_topic} Brain Power")
 
@@ -364,7 +378,7 @@ if username and api_key:
 
         topic_words = re.findall(r'[A-Za-z0-9]+', selected_topic)
         if topic_words:
-            fuzzy_pattern = r'[^A-Za-z0-9]*'.join([rf'{w}' for w in topic_words])
+            fuzzy_pattern = r'[^A-Za-z0-9]*'.join([rf'\b{w}\b' for w in topic_words])
             mastered_count = len(re.findall(rf'{fuzzy_pattern}[^\[]{{0,40}}?mastered', dossier_text, flags=re.IGNORECASE | re.DOTALL))
             gap_count = len(re.findall(rf'{fuzzy_pattern}[^\[]{{0,40}}?gap', dossier_text, flags=re.IGNORECASE | re.DOTALL))
         else:
@@ -718,11 +732,17 @@ if username and api_key:
                                 clean_speech = re.sub(r'\s+', ' ', clean_speech).strip()
                                 
                                 if clean_speech: 
-                                    with st.spinner("🎙️ Generating voice player..."):
-                                        html_player = get_html_audio_player(clean_speech)
-                                        components.html(html_player, height=70)
+                                    with st.spinner("🎙️ Generating voice..."):
+                                        audio_bytes = generate_audio_bytes(clean_speech)
+                                        
+                                    if audio_bytes:
+                                        # Use standard streamlit component to guarantee player renders
+                                        st.audio(audio_bytes, format='audio/mp3', autoplay=True)
+                                        st.success("✅ Voice generated successfully! (Click play if your browser blocked autoplay!)")
+                                    else:
+                                        st.error("❌ Audio generation failed. Reverting to text-only mode.")
                             except Exception as e:
-                                st.error(f"Voice UI Error: {e}")
+                                st.error(f"❌ Voice Server Error: {e}")
                 
                         if st.session_state.captured_image:
                             st.session_state.captured_image = None
