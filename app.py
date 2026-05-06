@@ -690,29 +690,6 @@ if username and api_key:
                         if not answer:
                             answer = "I'm sorry, I had trouble processing that. Could you try asking again?"
                             
-                        st.markdown(answer)
-                        
-                        if voice_on:
-                            try:
-                                clean_speech = re.sub(r'!\[.*?\]\((.*?)\)', '', answer)
-                                clean_speech = re.sub(r'\[.*?\]\((.*?)\)', '', clean_speech)
-                                clean_speech = re.sub(r'http[s]?://\S+', '', clean_speech) 
-                                clean_speech = clean_speech.replace('**', '').replace('#', '').replace('`', '').replace('_', '')
-                                clean_speech = re.sub(r'^\s*[\*\-]\s+', ' ', clean_speech, flags=re.MULTILINE)
-                                clean_speech = re.sub(r'\s+', ' ', clean_speech).strip()
-                                
-                                if clean_speech: 
-                                    with st.spinner("🎙️ Generating voice..."):
-                                        tts = gTTS(text=clean_speech[:1500], lang='en', tld='co.uk')
-                                        fp = io.BytesIO()
-                                        tts.write_to_fp(fp)
-                                        st.audio(fp.getvalue(), format='audio/mp3', autoplay=True)
-                            except Exception as e:
-                                st.error(f"Voice Server Error: {e}")
-                
-                        if st.session_state.captured_image:
-                            st.session_state.captured_image = None
-                
                 user_data["history"].append({"role": "model", "content": answer})
                 save_current_student(username, user_data)
                 st.session_state.unsummarized_messages += 2
@@ -727,6 +704,9 @@ if username and api_key:
                     args=[username, str(optimized_raw_history), selected_topic]
                 )
                 st.session_state.dossier_timer.start()
+                
+                # --- FORCED RERUN TO RENDER THE PLAY BUTTON INSTANTLY ---
+                st.rerun()
 
             except Exception as e:
                  st.error(f"Connection Error: {e}")
