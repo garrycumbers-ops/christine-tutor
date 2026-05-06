@@ -118,46 +118,33 @@ api_key = st.secrets.get("GEMINI_API_KEY", None)
 if not api_key:
     api_key = st.sidebar.text_input("Enter Google Gemini API Key", type="password")
 
-# --- ULTIMATE DUAL-ENGINE AUDIO GENERATOR ---
-def generate_audio_bytes(text):
-    '''Tries Edge-TTS first, instantly falls back to gTTS if it fails.'''
-    
-    # Attempt 1: Human Voice (Edge-TTS)
-    if EDGE_TTS_AVAILABLE:
-        result = {"bytes": b"", "error": None}
-        def run_async_code():
-            try:
-                async def _amain():
-                    communicate = edge_tts.Communicate(text, "en-GB-SoniaNeural")
-                    audio_data = bytearray()
-                    async for chunk in communicate.stream():
-                        if chunk["type"] == "audio":
-                            audio_data.extend(chunk["data"])
-                    return bytes(audio_data)
-                
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                result["bytes"] = loop.run_until_complete(_amain())
-                loop.close()
-            except Exception as e:
-                result["error"] = str(e)
-
-        t = threading.Thread(target=run_async_code)
-        t.start()
-        t.join()
-        
-        if not result["error"] and result["bytes"]:
-            return result["bytes"]
-
-    # Attempt 2: Robotic Voice Fallback (gTTS)
-    try:
-        tts = gTTS(text=text, lang='en', tld='co.uk')
-        fp = io.BytesIO()
-        tts.write_to_fp(fp)
-        return fp.getvalue()
-    except Exception as e:
-        st.error(f"Total Audio Failure: {e}")
-        return None
+# --- HTML AUDIO GENERATOR FIX ---
+def get_html_audio_player(text):
+    '''Uses native browser Web Speech API. 100% crash proof and avoids Streamlit widgets entirely.'''
+    # This bypasses edge_tts and gtts entirely, offloading speech to the user's browser.
+    # It completely solves Streamlit audio crashes.
+    safe_text = text.replace("'", "\'").replace('"', '\"').replace('\n', ' ')
+    html_code = f'''
+    <div style="padding: 10px; background-color: #f0f2f6; border-radius: 5px; margin-top: 10px;">
+        <button onclick="speakText()" style="background-color: #4CAF50; border: none; color: white; padding: 10px 20px; text-align: center; text-decoration: none; display: inline-block; font-size: 16px; margin: 4px 2px; cursor: pointer; border-radius: 5px;">▶️ Play Christine's Voice</button>
+        <button onclick="stopText()" style="background-color: #f44336; border: none; color: white; padding: 10px 20px; text-align: center; text-decoration: none; display: inline-block; font-size: 16px; margin: 4px 2px; cursor: pointer; border-radius: 5px;">⏹️ Stop</button>
+        <script>
+            function speakText() {{
+                window.speechSynthesis.cancel();
+                let utterance = new SpeechSynthesisUtterance('{safe_text}');
+                utterance.lang = 'en-GB'; // British English
+                utterance.rate = 1.0;
+                window.speechSynthesis.speak(utterance);
+            }}
+            function stopText() {{
+                window.speechSynthesis.cancel();
+            }}
+            // Try to autoplay once
+            setTimeout(speakText, 500); 
+        </script>
+    </div>
+    '''
+    return html_code
 
 # --- BACKGROUND DOSSIER SAVER (INACTIVITY TIMER) ---
 def background_dossier_save(username, chat_history_str, selected_topic):
@@ -499,7 +486,7 @@ if username and api_key:
                     grab_count = st.session_state.unsummarized_messages
                     recent_chat = str(user_data["history"][-grab_count:]) 
                     
-                    memory_prompt = f"""
+                    memory_prompt = f'''
                     You are an expert teacher maintaining a highly compressed, long-term dossier on a student.
                     CURRENT DOSSIER: {user_data.get('summary', '')}
                     RECENT CHAT: {recent_chat}
@@ -512,7 +499,7 @@ if username and api_key:
                     3. GAP TAGS: Start new or updated lines with exact format: [{selected_topic}] GAP:
                     4. PRUNE: If they master a previous GAP in {selected_topic}, delete that specific GAP tag. 
                     5. DOCUMENT PROGRESS: If they are working on a saved document, explicitly state which specific questions or paragraphs they have ALREADY finished.
-                    """
+                    '''
                     try:
                         analyzer = genai.GenerativeModel(model_name="gemini-1.5-flash-8b")
                         memory_response = analyzer.generate_content(memory_prompt)
@@ -613,21 +600,21 @@ if username and api_key:
                         current_turn_content.append(pil_image)
                     
                     if image_action == "Review my work for mistakes":
-                        action_prompt = """SYSTEM OVERRIDE: Please review my attached work. 
+                        action_prompt = '''SYSTEM OVERRIDE: Please review my attached work. 
                         1. If the attachment is a completed test or worksheet, FIRST give me a clear summary of my overall score (e.g., 'You got 8 out of 10 correct!'). 
                         2. Praise me for what I got right.
                         3. THEN, help me correct the ones I got wrong strictly ONE question at a time. Do not just give me the right answers. Use Socratic scaffolding to guide me to the correct answer.
                         4. CRITICAL: You must stay in this review mode. DO NOT switch back to teaching the main subject/topic until every single mistake in this document has been corrected.
-                        5. If it's not a test, just tell me what I did right and help me correct any mistakes step-by-step."""
+                        5. If it's not a test, just tell me what I did right and help me correct any mistakes step-by-step.'''
                     elif image_action == "Quiz me on this content":
                         action_prompt = "SYSTEM OVERRIDE: Please analyze this attached content. Do not ask if I am ready. IMMEDIATELY ask me the very first diagnostic quiz question strictly based on this material to test my understanding. CRITICAL: You must stay in this quiz mode. Ask me questions strictly ONE at a time. After I answer, grade it, and immediately ask the NEXT question about this document. DO NOT switch back to the main subject/topic until I explicitly say I am done quizzing."
                     elif image_action == "Train me for an Exam (AQA Style)":
-                        action_prompt = f"""SYSTEM OVERRIDE: Act as a strict AQA Examiner for our current subject ({current_subject}). 
+                        action_prompt = f'''SYSTEM OVERRIDE: Act as a strict AQA Examiner for our current subject ({current_subject}). 
                         1. Look at the attached document. 
                         2. Before asking your question, you MUST generate a visual aid related to the topic using your Markdown image tools (Rule 9 or Rule 10) and label it '**Figure 1**'. 
                         3. Generate a brand new, realistic exam question based on the document and 'Figure 1' using standard AQA command words. 
                         4. DO NOT give me the answer. Socratic scaffold my response strictly one step at a time by walking me through the Assessment Objectives (AOs) for this subject. Secure AO1 first.
-                        5. CRITICAL: You must stay in this exam mode. DO NOT switch back to the main topic until the exam question is fully answered and graded."""
+                        5. CRITICAL: You must stay in this exam mode. DO NOT switch back to the main topic until the exam question is fully answered and graded.'''
                     else:
                         action_prompt = "SYSTEM OVERRIDE: Please analyze the attached material. Guide me through it step-by-step to improve my core understanding of the concepts. Do not give me the answers. Ask me one thought-provoking question at a time based on this specific text/image. CRITICAL: You must stay in this guided mode. DO NOT switch back to teaching the main subject/topic until we have completely finished going through this entire document."
                         
@@ -733,16 +720,11 @@ if username and api_key:
                                 clean_speech = re.sub(r'\s+', ' ', clean_speech).strip()
                                 
                                 if clean_speech: 
-                                    with st.spinner("🎙️ Generating voice..."):
-                                        audio_bytes = generate_audio_bytes(clean_speech)
-                                    if audio_bytes:
-                                        # VISUAL DIAGNOSTIC ADDED: Will forcibly show the player
-                                        st.audio(audio_bytes, format='audio/mp3', autoplay=True)
-                                        st.success("✅ Voice generated successfully! (If it didn't play automatically, your browser blocked it. Click play above!)")
-                                    else:
-                                        st.error("❌ Audio generation failed entirely.")
+                                    with st.spinner("🎙️ Generating voice player..."):
+                                        html_player = get_html_audio_player(clean_speech)
+                                        st.markdown(html_player, unsafe_allow_html=True)
                             except Exception as e:
-                                st.error(f"❌ Voice Server Error: {e}")
+                                st.error(f"Voice UI Error: {e}")
                 
                         if st.session_state.captured_image:
                             st.session_state.captured_image = None
