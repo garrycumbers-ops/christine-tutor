@@ -123,8 +123,6 @@ if not api_key:
 # --- HTML AUDIO GENERATOR FIX ---
 def get_html_audio_player(text):
     '''Uses native browser Web Speech API. 100% crash proof and avoids Streamlit widgets entirely.'''
-    # This bypasses edge_tts and gtts entirely, offloading speech to the user's browser.
-    # It completely solves Streamlit audio crashes.
     safe_text = text.replace("'", "\'").replace('"', '\"').replace('\n', ' ')
     html_code = f'''
     <div style="padding: 10px; background-color: #f0f2f6; border-radius: 5px; margin-top: 10px;">
@@ -134,15 +132,13 @@ def get_html_audio_player(text):
             function speakText() {{
                 window.speechSynthesis.cancel();
                 let utterance = new SpeechSynthesisUtterance('{safe_text}');
-                utterance.lang = 'en-GB'; // British English
+                utterance.lang = 'en-GB'; 
                 utterance.rate = 1.0;
                 window.speechSynthesis.speak(utterance);
             }}
             function stopText() {{
                 window.speechSynthesis.cancel();
             }}
-            // Try to autoplay once
-            setTimeout(speakText, 500); 
         </script>
     </div>
     '''
@@ -357,7 +353,7 @@ if username and api_key:
 
         st.sidebar.markdown("---")
         voice_on = st.sidebar.toggle("🔊 Read Christine's answers out loud")
-        st.sidebar.caption("*(Plays when Christine sends a NEW message)*")
+        st.sidebar.caption("*(Turns on for the next message)*")
         
         # --- MASTERY PERCENTAGE TRACKER (FUZZY LOGIC FIX) ---
         st.sidebar.divider()
@@ -368,7 +364,7 @@ if username and api_key:
 
         topic_words = re.findall(r'[A-Za-z0-9]+', selected_topic)
         if topic_words:
-            fuzzy_pattern = r'[^A-Za-z0-9]*'.join([rf'{w}' for w in topic_words])
+            fuzzy_pattern = r'[^A-Za-z0-9]*'.join([rf'\b{w}\b' for w in topic_words])
             mastered_count = len(re.findall(rf'{fuzzy_pattern}[^\[]{{0,40}}?mastered', dossier_text, flags=re.IGNORECASE | re.DOTALL))
             gap_count = len(re.findall(rf'{fuzzy_pattern}[^\[]{{0,40}}?gap', dossier_text, flags=re.IGNORECASE | re.DOTALL))
         else:
