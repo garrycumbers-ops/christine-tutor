@@ -126,21 +126,23 @@ def generate_audio_bytes(text):
     error_logs = []
     
     try:
-        # 1. Write the text to a temporary file
-        with tempfile.NamedTemporaryFile(suffix=".txt", delete=False, mode="w", encoding="utf-8") as f_txt:
-            f_txt.write(text)
-            txt_path = f_txt.name
+        import uuid
+        txt_path = f"temp_{uuid.uuid4().hex}.txt"
+        mp3_path = f"temp_{uuid.uuid4().hex}.mp3"
+        
+        # Prevent massive payloads from freezing the server
+        safe_text = text[:1500]
+        
+        with open(txt_path, "w", encoding="utf-8") as f:
+            f.write(safe_text)
             
-        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f_mp3:
-            mp3_path = f_mp3.name
-            
-        # 2. Run the edge-tts command safely as a module to avoid PATH issues
+        # Run the edge-tts command safely as a module to avoid PATH issues
         result = subprocess.run(
             [sys.executable, "-m", "edge_tts", "-f", txt_path, "--voice", "en-GB-SoniaNeural", "--write-media", mp3_path], 
-            capture_output=True, text=True
+            capture_output=True, text=True, timeout=15
         )
         
-        if result.returncode == 0:
+        if result.returncode == 0 and os.path.exists(mp3_path):
             with open(mp3_path, "rb") as f:
                 audio_data = f.read()
             
@@ -156,11 +158,16 @@ def generate_audio_bytes(text):
             error_logs.append(f"Edge-TTS CLI Error: {result.stderr}")
             
     except Exception as e:
-        error_logs.append(f"Edge-TTS Thread Error: {e}")
+        error_logs.append(f"Edge-TTS Exception: {e}")
+        try:
+            if os.path.exists(txt_path): os.remove(txt_path)
+            if os.path.exists(mp3_path): os.remove(mp3_path)
+        except:
+            pass
 
     # 4. Fallback to gTTS if edge-tts is missing or blocked
     try:
-        tts = gTTS(text=text, lang='en', tld='co.uk')
+        tts = gTTS(text=text[:1500], lang='en', tld='co.uk')
         fp = io.BytesIO()
         tts.write_to_fp(fp)
         return fp.getvalue()
@@ -378,7 +385,7 @@ if username and api_key:
 
         st.sidebar.markdown("---")
         voice_on = st.sidebar.toggle("🔊 Read Christine's answers out loud")
-        st.sidebar.caption("*(Turns on for the next message)*")
+        st.sidebar.caption("*(Voice generates ONLY for new messages)*")
         
         # --- MASTERY PERCENTAGE TRACKER (FUZZY LOGIC FIX) ---
         st.sidebar.divider()
@@ -389,7 +396,7 @@ if username and api_key:
 
         topic_words = re.findall(r'[A-Za-z0-9]+', selected_topic)
         if topic_words:
-            fuzzy_pattern = r'[^A-Za-z0-9]*'.join([rf'\b{w}\b' for w in topic_words])
+            fuzzy_pattern = r'[^A-Za-z0-9]*'.join([rf'{w}' for w in topic_words])
             mastered_count = len(re.findall(rf'{fuzzy_pattern}[^\[]{{0,40}}?mastered', dossier_text, flags=re.IGNORECASE | re.DOTALL))
             gap_count = len(re.findall(rf'{fuzzy_pattern}[^\[]{{0,40}}?gap', dossier_text, flags=re.IGNORECASE | re.DOTALL))
         else:
@@ -743,7 +750,7 @@ if username and api_key:
                                 clean_speech = re.sub(r'\s+', ' ', clean_speech).strip()
                                 
                                 if clean_speech: 
-                                    with st.spinner("🎙️ Generating voice player..."):
+                                    with st.spinner("🎙️ Generating voice..."):
                                         audio_bytes = generate_audio_bytes(clean_speech)
                                         
                                     if audio_bytes:
@@ -751,7 +758,7 @@ if username and api_key:
                                         st.audio(audio_bytes, format='audio/mp3', autoplay=True)
                                         st.success("✅ Voice generated successfully! (Click play if your browser blocked autoplay!)")
                                     else:
-                                        st.error("❌ Audio generation failed entirely.")
+                                        st.error("❌ Audio generation failed entirely. Check errors above.")
                             except Exception as e:
                                 st.error(f"❌ Voice Server Error: {e}")
                 
