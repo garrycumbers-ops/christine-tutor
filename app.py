@@ -384,8 +384,9 @@ if username and api_key:
                 st.rerun()
 
         st.sidebar.markdown("---")
-        voice_on = st.sidebar.toggle("🔊 Read Christine's answers out loud")
-        st.sidebar.caption("*(Voice generates ONLY for new messages)*")
+        # FIXED: We check this toggle immediately!
+        voice_on = st.sidebar.toggle("🔊 Read Christine's answers out loud", key="voice_toggle")
+        st.sidebar.caption("*(Turns on for the next message)*")
         
         # --- MASTERY PERCENTAGE TRACKER (FUZZY LOGIC FIX) ---
         st.sidebar.divider()
@@ -396,7 +397,7 @@ if username and api_key:
 
         topic_words = re.findall(r'[A-Za-z0-9]+', selected_topic)
         if topic_words:
-            fuzzy_pattern = r'[^A-Za-z0-9]*'.join([rf'{w}' for w in topic_words])
+            fuzzy_pattern = r'[^A-Za-z0-9]*'.join([rf'\b{w}\b' for w in topic_words])
             mastered_count = len(re.findall(rf'{fuzzy_pattern}[^\[]{{0,40}}?mastered', dossier_text, flags=re.IGNORECASE | re.DOTALL))
             gap_count = len(re.findall(rf'{fuzzy_pattern}[^\[]{{0,40}}?gap', dossier_text, flags=re.IGNORECASE | re.DOTALL))
         else:
@@ -739,7 +740,7 @@ if username and api_key:
                             
                         st.markdown(answer)
                         
-                        if voice_on:
+                        if st.session_state.get("voice_toggle", False):
                             try:
                                 # Strip Markdown formatting before speaking
                                 clean_speech = re.sub(r'!\[.*?\]\((.*?)\)', '', answer)
@@ -754,7 +755,6 @@ if username and api_key:
                                         audio_bytes = generate_audio_bytes(clean_speech)
                                         
                                     if audio_bytes:
-                                        # Use standard streamlit audio player for guaranteed rendering
                                         st.audio(audio_bytes, format='audio/mp3', autoplay=True)
                                         st.success("✅ Voice generated! (Click play if your browser blocked autoplay!)")
                                     else:
