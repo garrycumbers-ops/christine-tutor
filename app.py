@@ -3,15 +3,16 @@ import json
 import os
 import google.generativeai as genai
 from PIL import Image
-try:
-    from gtts import gTTS
-except ImportError:
-    pass
 import io
 import re
 import gspread
 import threading
 import time
+
+try:
+    from gtts import gTTS
+except ImportError:
+    pass
 
 # --- GOOGLE SHEETS ENGINE ---
 @st.cache_resource
@@ -110,28 +111,6 @@ api_key = st.secrets.get("GEMINI_API_KEY", None)
 if not api_key:
     api_key = st.sidebar.text_input("Enter Google Gemini API Key", type="password")
 
-# --- PURE gTTS AUDIO GENERATOR ---
-def generate_and_play_audio(text, autoplay=False):
-    '''Uses synchronous gTTS. 100% crash proof inside Streamlit.'''
-    try:
-        clean_speech = re.sub(r'!\[.*?\]\((.*?)\)', '', text)
-        clean_speech = re.sub(r'\[.*?\]\((.*?)\)', '', clean_speech)
-        clean_speech = re.sub(r'http[s]?://\S+', '', clean_speech) 
-        clean_speech = clean_speech.replace('**', '').replace('#', '').replace('`', '').replace('_', '')
-        clean_speech = re.sub(r'^\s*[\*\-]\s+', ' ', clean_speech, flags=re.MULTILINE)
-        clean_speech = re.sub(r'\s+', ' ', clean_speech).strip()
-        
-        if not clean_speech:
-            return
-            
-        with st.spinner("🎙️ Loading audio..."):
-            safe_text = clean_speech[:1500] 
-            tts = gTTS(text=safe_text, lang='en', tld='co.uk')
-            fp = io.BytesIO()
-            tts.write_to_fp(fp)
-            st.audio(fp.getvalue(), format='audio/mp3', autoplay=autoplay)
-    except Exception as e:
-        st.error(f"Audio Generation Error: {e}")
 
 # --- BACKGROUND DOSSIER SAVER (INACTIVITY TIMER) ---
 def background_dossier_save(username, chat_history_str, selected_topic):
@@ -341,6 +320,9 @@ if username and api_key:
                 st.rerun()
 
         st.sidebar.markdown("---")
+        
+        # --- FIXED VOICE TOGGLE ---
+        # The key="voice_toggle" binds directly to session_state so the app ALWAYS remembers the setting.
         voice_on = st.sidebar.toggle("🔊 Read Christine's answers out loud", key="voice_toggle")
         
         # --- MASTERY PERCENTAGE TRACKER ---
@@ -505,10 +487,27 @@ if username and api_key:
             with st.chat_message(role_display):
                 st.markdown(msg["content"])
                 
-                # Render history voice buttons inline
-                if role_display == "assistant" and voice_on:
+                # Check directly from session state if voice toggle is currently ON
+                is_voice_enabled = st.session_state.get("voice_toggle", False)
+                
+                if role_display == "assistant" and is_voice_enabled:
                     if st.button("🔊 Play Voice", key=f"btn_hist_{i}"):
-                        generate_and_play_audio(msg["content"], autoplay=True)
+                        clean_speech = re.sub(r'!\[.*?\]\((.*?)\)', '', msg["content"])
+                        clean_speech = re.sub(r'\[.*?\]\((.*?)\)', '', clean_speech)
+                        clean_speech = re.sub(r'http[s]?://\S+', '', clean_speech) 
+                        clean_speech = clean_speech.replace('**', '').replace('#', '').replace('`', '').replace('_', '')
+                        clean_speech = re.sub(r'^\s*[\*\-]\s+', ' ', clean_speech, flags=re.MULTILINE)
+                        clean_speech = re.sub(r'\s+', ' ', clean_speech).strip()
+                        
+                        if clean_speech:
+                            with st.spinner("🎙️ Loading audio..."):
+                                try:
+                                    tts = gTTS(text=clean_speech[:1500], lang='en', tld='co.uk')
+                                    fp = io.BytesIO()
+                                    tts.write_to_fp(fp)
+                                    st.audio(fp.getvalue(), format='audio/mp3', autoplay=True)
+                                except Exception as e:
+                                    st.error(f"Voice generation failed: {e}")
 
         # --- INPUT & PROCESSING ---
         st.markdown("""
@@ -698,15 +697,6 @@ if username and api_key:
                         if not answer:
                             answer = "I'm sorry, I had trouble processing that. Could you try asking again?"
                             
-                        st.markdown(answer)
-                        
-                        # --- INSTANT AUDIO GENERATION WITHOUT RERUN ---
-                        if voice_on:
-                            generate_and_play_audio(answer, autoplay=True)
-                
-                        if st.session_state.captured_image:
-                            st.session_state.captured_image = None
-                
                 user_data["history"].append({"role": "model", "content": answer})
                 save_current_student(username, user_data)
                 st.session_state.unsummarized_messages += 2
@@ -721,6 +711,11 @@ if username and api_key:
                     args=[username, str(optimized_raw_history), selected_topic]
                 )
                 st.session_state.dossier_timer.start()
+                
+                # IMPORTANT: We force Streamlit to refresh instantly after Christine answers. 
+                # This ensures the new message falls into the "Chat History" block above, 
+                # which immediately reveals the "Play Voice" button!
+                st.rerun()
 
             except Exception as e:
                  st.error(f"Connection Error: {e}")
