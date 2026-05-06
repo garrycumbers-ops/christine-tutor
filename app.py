@@ -9,11 +9,6 @@ import re
 import gspread
 import threading
 import time
-import sys
-import uuid
-import tempfile
-import subprocess
-from pathlib import Path
 
 # --- GOOGLE SHEETS ENGINE ---
 @st.cache_resource
@@ -291,6 +286,9 @@ if username and api_key:
             st.session_state.current_user = username
 
     user_data = st.session_state.user_data
+    
+    # Initialize auto_topic for the direct execution flow
+    auto_topic = None
 
     if not user_data.get("age"):
         st.info(f"Hi {username}! I'm Christine. Let's get set up.")
@@ -328,6 +326,7 @@ if username and api_key:
         
         current_subject = f"{selected_course}: {selected_topic}"
       
+        # --- NO-RERUN TOPIC SWITCH LOGIC FIX ---
         if current_subject != user_data.get("last_topic"):
             is_active_switch = user_data.get("last_topic") != ""
             user_data["last_topic"] = current_subject
@@ -337,14 +336,13 @@ if username and api_key:
                 if st.session_state.unsummarized_messages > 0:
                     st.session_state.unsummarized_messages = 14 
                 
-                st.session_state.auto_submit_topic = current_subject
-                st.rerun()
+                # By passing this directly, we avoid the double st.rerun() that ruins audio autoplay!
+                auto_topic = current_subject
 
         st.sidebar.markdown("---")
         
-        # --- FIXED VOICE TOGGLE ---
-        # State of the toggle is kept in session_state immediately
-        voice_on = st.sidebar.toggle("🔊 Read Christine's answers out loud", key="voice_toggle")
+        # Read the voice toggle directly from the sidebar
+        voice_on = st.sidebar.toggle("🔊 Read Christine's answers out loud", key="voice_toggle_widget")
         
         # --- MASTERY PERCENTAGE TRACKER ---
         st.sidebar.divider()
@@ -502,16 +500,15 @@ if username and api_key:
                 except Exception as e:
                     st.warning(f"Dossier update skipped. Error: {e}")
 
-        # --- CHAT HISTORY & HISTORICAL PLAYBACK ---
+        # --- CHAT HISTORY ---
         for i, msg in enumerate(user_data["history"]):
             role_display = "user" if msg["role"] == "user" else "assistant"
             with st.chat_message(role_display):
                 st.markdown(msg["content"])
                 
                 # Check directly from session state if voice toggle is currently ON
-                is_voice_enabled = st.session_state.get("voice_toggle", False)
+                is_voice_enabled = st.session_state.get("voice_toggle_widget", False)
                 
-                # Play audio if history button clicked
                 if role_display == "assistant" and is_voice_enabled:
                     if st.button("🔊 Play Voice", key=f"btn_hist_{i}"):
                         clean_speech = clean_text_for_speech(msg["content"])
@@ -564,8 +561,6 @@ if username and api_key:
             if audio_id != st.session_state.last_processed_audio_id:
                 is_new_audio = True
 
-        auto_topic = st.session_state.pop("auto_submit_topic", None)
-        
         has_text = bool(user_text)
         has_image = bool(is_new_image and active_image)
         has_audio = bool(is_new_audio and user_audio)
@@ -711,21 +706,21 @@ if username and api_key:
                             
                         st.markdown(answer)
                         
-                        # FORCE RENDER AUDIO INSTANTLY FOR NEW MESSAGE
-                        if st.session_state.get("voice_toggle", False):
+                        # Generate audio continuously in the SAME pass for the new message
+                        if st.session_state.get("voice_toggle_widget", False):
                             clean_speech = clean_text_for_speech(answer)
-                            if clean_speech:
+                            if clean_speech: 
                                 with st.spinner("🎙️ Generating voice..."):
                                     audio_bytes = generate_audio_bytes(clean_speech)
-                                    if audio_bytes:
-                                        st.audio(audio_bytes, format='audio/mp3', autoplay=True)
-
+                                if audio_bytes:
+                                    st.audio(audio_bytes, format='audio/mp3', autoplay=True)
+                
+                        if st.session_state.captured_image:
+                            st.session_state.captured_image = None
+                
                 user_data["history"].append({"role": "model", "content": answer})
                 save_current_student(username, user_data)
                 st.session_state.unsummarized_messages += 2
-                
-                if st.session_state.captured_image:
-                    st.session_state.captured_image = None
 
                 # --- THE INACTIVITY TIMER ACTIVATION FIX ---
                 if 'dossier_timer' in st.session_state and st.session_state.dossier_timer.is_alive():
