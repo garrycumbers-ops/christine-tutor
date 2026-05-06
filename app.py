@@ -9,6 +9,11 @@ import re
 import gspread
 import threading
 import time
+import sys
+import uuid
+import tempfile
+import subprocess
+from pathlib import Path
 
 # --- GOOGLE SHEETS ENGINE ---
 @st.cache_resource
@@ -252,10 +257,6 @@ if "last_processed_file_id" not in st.session_state: st.session_state.last_proce
 if "unsummarized_messages" not in st.session_state: st.session_state.unsummarized_messages = 0
 if "last_processed_audio_id" not in st.session_state: st.session_state.last_processed_audio_id = None
 if "use_vault" not in st.session_state: st.session_state.use_vault = False
-
-# Safely initialize the auto_play_text tracker
-if "auto_play_text" not in st.session_state:
-    st.session_state.auto_play_text = None
     
 raw_username = st.text_input("Please enter your first name to begin:", key="username_input")
 username = raw_username.strip().lower() if raw_username else ""
@@ -340,6 +341,9 @@ if username and api_key:
                 st.rerun()
 
         st.sidebar.markdown("---")
+        
+        # --- FIXED VOICE TOGGLE ---
+        # State of the toggle is kept in session_state immediately
         voice_on = st.sidebar.toggle("🔊 Read Christine's answers out loud", key="voice_toggle")
         
         # --- MASTERY PERCENTAGE TRACKER ---
@@ -498,32 +502,24 @@ if username and api_key:
                 except Exception as e:
                     st.warning(f"Dossier update skipped. Error: {e}")
 
-        # --- CHAT HISTORY & VOICE PLAYBACK BUTTONS ---
+        # --- CHAT HISTORY & HISTORICAL PLAYBACK ---
         for i, msg in enumerate(user_data["history"]):
             role_display = "user" if msg["role"] == "user" else "assistant"
             with st.chat_message(role_display):
                 st.markdown(msg["content"])
                 
-                # Render history voice buttons inline if toggle is on
-                if role_display == "assistant" and voice_on:
+                # Check directly from session state if voice toggle is currently ON
+                is_voice_enabled = st.session_state.get("voice_toggle", False)
+                
+                # Play audio if history button clicked
+                if role_display == "assistant" and is_voice_enabled:
                     if st.button("🔊 Play Voice", key=f"btn_hist_{i}"):
-                        st.session_state.auto_play_text = msg["content"]
-
-        # --- THE MAGIC AUDIO PLAYER BLOCK ---
-        # This sits right below the chat history and executes perfectly on the rerender!
-        if st.session_state.get("auto_play_text"):
-            text_to_speak = clean_text_for_speech(st.session_state.auto_play_text)
-            if text_to_speak:
-                with st.spinner("🎙️ Generating voice..."):
-                    audio_bytes = generate_audio_bytes(text_to_speak)
-                    if audio_bytes:
-                        st.audio(audio_bytes, format='audio/mp3', autoplay=True)
-                        st.success("✅ Voice generated! (Click play on the widget above if your browser blocks autoplay)")
-                    else:
-                        st.error("Audio generation failed.")
-            
-            # Clear the state so it doesn't play again endlessly on the next page interaction
-            st.session_state.auto_play_text = None
+                        clean_speech = clean_text_for_speech(msg["content"])
+                        if clean_speech:
+                            with st.spinner("🎙️ Loading audio..."):
+                                audio_bytes = generate_audio_bytes(clean_speech)
+                                if audio_bytes:
+                                    st.audio(audio_bytes, format='audio/mp3', autoplay=True)
 
         # --- INPUT & PROCESSING ---
         st.markdown("""
@@ -713,13 +709,21 @@ if username and api_key:
                         if not answer:
                             answer = "I'm sorry, I had trouble processing that. Could you try asking again?"
                             
+                        st.markdown(answer)
+                        
+                        # FORCE RENDER AUDIO INSTANTLY FOR NEW MESSAGE
+                        if st.session_state.get("voice_toggle", False):
+                            clean_speech = clean_text_for_speech(answer)
+                            if clean_speech:
+                                with st.spinner("🎙️ Generating voice..."):
+                                    audio_bytes = generate_audio_bytes(clean_speech)
+                                    if audio_bytes:
+                                        st.audio(audio_bytes, format='audio/mp3', autoplay=True)
+
                 user_data["history"].append({"role": "model", "content": answer})
                 save_current_student(username, user_data)
                 st.session_state.unsummarized_messages += 2
                 
-                if voice_on:
-                    st.session_state.auto_play_text = answer
-
                 if st.session_state.captured_image:
                     st.session_state.captured_image = None
 
@@ -733,9 +737,6 @@ if username and api_key:
                     args=[username, str(optimized_raw_history), selected_topic]
                 )
                 st.session_state.dossier_timer.start()
-
-                # FORCE A RERUN SO THE NEW MESSAGE ENTERS HISTORY LOOP AND THE PLAYER IS DRAWN SAFELY
-                st.rerun()
 
             except Exception as e:
                  st.error(f"Connection Error: {e}")
