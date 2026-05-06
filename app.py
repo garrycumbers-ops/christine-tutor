@@ -754,9 +754,9 @@ if username and api_key:
                                         audio_bytes = generate_audio_bytes(clean_speech)
                                         
                                     if audio_bytes:
-                                        # Use standard streamlit component to guarantee player renders
+                                        # Use standard streamlit audio player for guaranteed rendering
                                         st.audio(audio_bytes, format='audio/mp3', autoplay=True)
-                                        st.success("✅ Voice generated successfully! (Click play if your browser blocked autoplay!)")
+                                        st.success("✅ Voice generated! (Click play if your browser blocked autoplay!)")
                                     else:
                                         st.error("❌ Audio generation failed entirely. Check errors above.")
                             except Exception as e:
