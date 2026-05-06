@@ -13,6 +13,8 @@ import gspread
 import threading
 import time
 import asyncio
+import base64
+import streamlit.components.v1 as components
 
 # Attempt to load edge_tts safely
 try:
@@ -366,7 +368,7 @@ if username and api_key:
 
         topic_words = re.findall(r'[A-Za-z0-9]+', selected_topic)
         if topic_words:
-            fuzzy_pattern = r'[^A-Za-z0-9]*'.join([rf'\b{w}\b' for w in topic_words])
+            fuzzy_pattern = r'[^A-Za-z0-9]*'.join([rf'{w}' for w in topic_words])
             mastered_count = len(re.findall(rf'{fuzzy_pattern}[^\[]{{0,40}}?mastered', dossier_text, flags=re.IGNORECASE | re.DOTALL))
             gap_count = len(re.findall(rf'{fuzzy_pattern}[^\[]{{0,40}}?gap', dossier_text, flags=re.IGNORECASE | re.DOTALL))
         else:
@@ -722,7 +724,7 @@ if username and api_key:
                                 if clean_speech: 
                                     with st.spinner("🎙️ Generating voice player..."):
                                         html_player = get_html_audio_player(clean_speech)
-                                        st.markdown(html_player, unsafe_allow_html=True)
+                                        components.html(html_player, height=70)
                             except Exception as e:
                                 st.error(f"Voice UI Error: {e}")
                 
