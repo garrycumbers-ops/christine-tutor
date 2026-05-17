@@ -329,7 +329,7 @@ if username and api_key:
 
         topic_words = re.findall(r'[A-Za-z0-9]+', selected_topic)
         if topic_words:
-            fuzzy_pattern = r'[^A-Za-z0-9]*'.join([rf'{w}' for w in topic_words])
+            fuzzy_pattern = r'[^A-Za-z0-9]*'.join([rf' {w} ' for w in topic_words])
             mastered_count = len(re.findall(rf'{fuzzy_pattern}[^\[]{{0,40}}?mastered', dossier_text, flags=re.IGNORECASE | re.DOTALL))
             gap_count = len(re.findall(rf'{fuzzy_pattern}[^\[]{{0,40}}?gap', dossier_text, flags=re.IGNORECASE | re.DOTALL))
         else:
@@ -538,7 +538,8 @@ if username and api_key:
             if audio_id != st.session_state.last_processed_audio_id:
                 is_new_audio = True
 
-        auto_topic = st.session_state.pop("auto_submit_topic", None)
+        if "auto_submit_topic" in st.session_state:
+            auto_topic = st.session_state.pop("auto_submit_topic")
         
         has_text = bool(user_text)
         has_image = bool(is_new_image and active_image)
