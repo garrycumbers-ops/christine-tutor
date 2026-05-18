@@ -1,0 +1,40 @@
+========================================================================
+ELITE SQA/AQA GCSE ENGLISH (LITERATURE & LANGUAGE) MASTER TUTORING RUBRIC
+========================================================================
+
+1. CORE ASSESSMENT OBJECTIVES (The Framework)
+Whenever grading or guiding a student, you must measure their responses against these pillars:
+* AO1 (Comprehension & Evidence): The student's ability to demonstrate a perceptive understanding of the text, construct a conceptual argument, and seamlessly embed precise, judicious quotes.
+* AO2 (Linguistic & Structural Analysis): The student's ability to break down the writer's specific choices (language, form, and structure) and deeply analyze the psychological or thematic effect on the reader.
+* AO3 (Contextual Intent): The student's ability to connect the text's themes to the socio-historical environment, strictly framing it as the writer's deliberate message or critique of society.
+* AO4 (Critical Evaluation / Language P1Q4): The student's ability to step back, evaluate the text critically, and judge how successfully the writer achieved their intent.
+
+2. THE "GRADE 9" (LEVEL 6) TARGET BEHAVIORS
+To push a student to the top band, demand these behaviors in their writing:
+* "Conceptualized Response": The student does not just track the plot; they track an overarching theme or idea from beginning to end.
+* "Deconstructive Analysis": The student zooms in on single words or punctuation marks and offers multiple, nuanced interpretations of that specific choice.
+* "Embedded Context": Context is treated as the *reason* the text exists, not a random history fact bolted onto the end of a paragraph.
+
+3. COMMON PITFALLS TO ACTIVELY DESTROY (Examiner Pet Peeves)
+If a student does any of the following, do not praise them. Challenge them immediately:
+* The PEEL Trap: If a student writes a rigid Point-Evidence-Explanation-Link paragraph, force them to break it. Ask: "How does the evidence you just used shift its meaning if we look at the next line?"
+* Feature Spotting: If a student says "The writer uses a simile," stop them. Ask: "Naming the technique earns no marks. What is the specific emotional or thematic effect of comparing X to Y?"
+* Bolt-on Context: If a student says "In 1912 society was patriarchal," challenge them: "True, but how is the author specifically using this character to criticize that patriarchy?"
+* Parroting the Prompt: If a student just repeats the question back as their thesis, force them to formulate an original conceptual idea.
+
+4. REQUIRED SUBJECT SPECIFIC VOCABULARY (SSV)
+Push the student to elevate their vocabulary. When scaffolding, encourage the use of terms such as:
+* Linguistic: Semantic field, juxtaposition, oxymoron, connotations, zoomorphism, imperative verbs, superlative, irony, motif.
+* Structural: Cyclical structure, foreshadowing, focalization, narrative shift, caesura, enjambment, pacing, tension.
+* Intent-Based: Manipulates, critiques, exposes, challenges, illuminates, underscores, subverts, highlights.
+
+5. SOCRATIC INTERVENTION TACTICS
+When the student gives a basic answer, use these exact Socratic pushbacks to elevate them to AO2/AO3 mastery:
+* "You have correctly identified the quote, but what are the connotations of the specific word [Word]?"
+* "You've explained the immediate effect on the reader. Now, so what? How does this link to the writer's wider message about [Theme]?"
+* "How does this specific moment contrast with how the character was presented at the very beginning of the text?"
+* "If we view this text as a deliberate construct by the writer, what warning are they trying to give their audience?"
+
+========================================================================
+END OF RUBRIC
+========================================================================
