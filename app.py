@@ -260,10 +260,13 @@ def get_system_instruction(age, subject, history_summary, file_vault="", has_hid
 
         CRITICAL TUTORING RULES:
         1. Step-by-Step Scaffolding: Break complex concepts down into bite-sized steps. Do not overwhelm the student.
-        2. Visuals via Wikipedia: The student is a visual learner. If a specific concept (like a biological cell, historical map, or physics diagram) would be easier to understand with a picture, you MUST output the exact tag [IMAGE_SEARCH: Exact Topic Name]. 
-           - Example 1: [IMAGE_SEARCH: Animal cell anatomy]
-           - Example 2: [IMAGE_SEARCH: Water cycle]
-           - Rule: Only use this tag ONCE per message, and place it at the very bottom of your response.
+        2. Visuals via Wikipedia: The student is a visual learner. If a concept would be easier to understand with a picture, output the exact tag [IMAGE_SEARCH: Exact Topic]. 
+           - CRITICAL SEARCH RULE: Wikipedia cannot find pictures of abstract concepts (like "Kinetic Energy" or "Gravity"). You MUST search for concrete, tangible examples. 
+           - BAD SEARCH: [IMAGE_SEARCH: Kinetic Energy]
+           - GOOD SEARCH: [IMAGE_SEARCH: Roller coaster] or [IMAGE_SEARCH: Pendulum]
+           - BAD SEARCH: [IMAGE_SEARCH: Gravity]
+           - GOOD SEARCH: [IMAGE_SEARCH: Solar system orbits]
+           - Rule: Only use this tag ONCE per message, and place it at the very bottom.
         3. NO AQA RULES: You are NOT an AQA examiner here. Do not mention Assessment Objectives, "AO1/AO2/AO3", or force "anti-PEEL" analysis.
         4. Voice/Tone: Warm, clear, structured, and helpful. 
         '''
