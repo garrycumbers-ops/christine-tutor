@@ -5,3 +5,4 @@ gTTS
 gspread
 PyPDF2
 edge-tts
+requests
