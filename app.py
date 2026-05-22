@@ -9,6 +9,33 @@ import re
 import gspread
 import threading
 import time
+import requests
+
+# --- NEW: WIKIMEDIA SEARCH FUNCTION ---
+def fetch_wikimedia_image(search_query):
+    '''Searches Wikipedia for a topic and returns the URL of its primary image.'''
+    url = "https://en.wikipedia.org/w/api.php"
+    params = {
+        "action": "query",
+        "format": "json",
+        "generator": "search",
+        "gsrsearch": search_query,
+        "gsrlimit": 1,
+        "prop": "pageimages",
+        "piprop": "original"
+    }
+    
+    try:
+        response = requests.get(url, params=params, timeout=5).json()
+        pages = response.get("query", {}).get("pages", {})
+        if pages:
+            first_page = list(pages.values())[0]
+            image_url = first_page.get("original", {}).get("source")
+            return image_url
+    except Exception as e:
+        print(f"Wikimedia API Error: {e}")
+        
+    return None
 
 # --- NEW: AQA RUBRIC LOADER ---
 @st.cache_data
@@ -40,7 +67,7 @@ try:
 except Exception as e:
     st.error(f"Could not connect to Google Sheets. Check your exact spreadsheet name: {e}")
 
-# --- NEW: SYLLABUS LOADER ---
+# --- SYLLABUS LOADER ---
 def load_syllabus():
     try:
         records = syllabus_sheet.get_all_records()
@@ -221,26 +248,24 @@ def get_system_instruction(age, subject, history_summary, file_vault="", has_hid
         6. Voice/Tone: Academic, rigorously challenging, yet encouraging. Never use emojis. NEVER start your response with a microphone emoji.
         '''
     else:
-        # STEM / HISTORY -> General Memory Coach
+        # STEM / HISTORY -> Visual Memory Coach
         return f'''
-        You are "Christine," an empathetic, step-by-step General Memory Coach and Tutor for STEM, History, and other non-literary subjects.
+        You are "Christine," an empathetic General Memory Coach and Tutor for STEM, History, and other non-literary subjects.
 
         USER PROFILE:
         Age: {age} (Student)
         Current Topic: {subject}
-        Past Context (Mastery & Gaps): {history_summary}
+        Past Context: {history_summary}
         {vault_text}
 
-        CURRICULUM GOAL:
-        Act as a supportive and structured tutor. Your goal is to help the student master concepts using standard memory techniques (like active recall, spaced repetition, analogies) and clear visual aids.
-
         CRITICAL TUTORING RULES:
-        1. Step-by-Step Guidance: Break down complex {subject} concepts into bite-sized, logical steps. Do not overwhelm the student.
-        2. Empathy & Encouragement: Be warmly encouraging and celebrate small wins.
-        3. Markdown Visual Aids: Use Markdown heavily (bolding, lists, code blocks, tables) to structure information clearly for memory retention.
-        4. Check for Understanding: End your explanations with a simple, friendly question to check if they grasped the specific concept.
-        5. NO AQA RULES: You are NOT an AQA examiner here. Do not mention Assessment Objectives, "AO1/AO2/AO3", or force "anti-PEEL" analysis unless specifically asked.
-        6. Voice/Tone: Warm, clear, structured, and helpful. Never start your response with a microphone emoji.
+        1. Step-by-Step Scaffolding: Break complex concepts down into bite-sized steps. Do not overwhelm the student.
+        2. Visuals via Wikipedia: The student is a visual learner. If a specific concept (like a biological cell, historical map, or physics diagram) would be easier to understand with a picture, you MUST output the exact tag [IMAGE_SEARCH: Exact Topic Name]. 
+           - Example 1: [IMAGE_SEARCH: Animal cell anatomy]
+           - Example 2: [IMAGE_SEARCH: Water cycle]
+           - Rule: Only use this tag ONCE per message, and place it at the very bottom of your response.
+        3. NO AQA RULES: You are NOT an AQA examiner here. Do not mention Assessment Objectives, "AO1/AO2/AO3", or force "anti-PEEL" analysis.
+        4. Voice/Tone: Warm, clear, structured, and helpful. 
         '''
     
 def convert_history_for_gemini(history):
@@ -527,7 +552,22 @@ if username and api_key:
         for i, msg in enumerate(user_data["history"]):
             role_display = "user" if msg["role"] == "user" else "assistant"
             with st.chat_message(role_display):
-                st.markdown(msg["content"])
+                
+                # --- HISTORICAL WIKIMEDIA IMAGE RE-RENDER FIX ---
+                # Check if there is an image tag in the HISTORY, display it, then strip it.
+                display_content = msg["content"]
+                if role_display == "assistant":
+                    historical_img_match = re.search(r'\[IMAGE_SEARCH:\s*(.*?)\]', display_content, re.IGNORECASE)
+                    if historical_img_match:
+                        historical_search_term = historical_img_match.group(1).strip()
+                        display_content = re.sub(r'\[IMAGE_SEARCH:\s*.*?\]', '', display_content, flags=re.IGNORECASE).strip()
+                        st.markdown(display_content)
+                        # We don't fetch the image again from the API to save time, we just note it was there
+                        st.caption(f"*(Historical image reference: {historical_search_term})*")
+                    else:
+                        st.markdown(display_content)
+                else:
+                    st.markdown(display_content)
                 
                 # Check directly from session state if voice toggle is currently ON
                 is_voice_enabled = st.session_state.get("voice_toggle_widget", False)
@@ -535,7 +575,7 @@ if username and api_key:
                 # Play audio if history button clicked
                 if role_display == "assistant" and is_voice_enabled:
                     if st.button("🔊 Play Voice", key=f"btn_hist_{i}"):
-                        clean_speech = clean_text_for_speech(msg["content"])
+                        clean_speech = clean_text_for_speech(display_content)
                         if clean_speech:
                             with st.spinner("🎙️ Loading audio..."):
                                 audio_bytes = generate_audio_bytes(clean_speech)
@@ -718,12 +758,44 @@ if username and api_key:
                                 chat = model.start_chat(history=chat_history)
                                 response = chat.send_message(display_text)
                     
+                        # Clean the raw answer of audio tags
                         answer = response.text.replace("🎤 Voice Response", "").replace("🎤 Voice response", "").replace("🎤 Voice Message", "").replace("🎤 [Voice Message]", "").replace("*[🎤 Voice Message]*", "").strip()
+                        
+                        # --- NEW: WIKIMEDIA IMAGE INTERCEPTOR ---
+                        image_url = None
+                        img_match = re.search(r'\[IMAGE_SEARCH:\s*(.*?)\]', answer, re.IGNORECASE)
+                        
+                        if img_match:
+                            # 1. Extract the search term
+                            search_term = img_match.group(1).strip()
+                            
+                            # 2. Fetch the image URL in the background
+                            with st.spinner(f"🔍 Searching visual archives for '{search_term}'..."):
+                                image_url = fetch_wikimedia_image(search_term)
+                            
+                            # 3. Erase the secret tag from the text the student sees so the audio player won't read it
+                            answer = re.sub(r'\[IMAGE_SEARCH:\s*.*?\]', '', answer, flags=re.IGNORECASE).strip()
+                            
+                            # Keep the tag in history so we can note it later, but format it nicely here
+                            history_answer = answer + f"\n\n[IMAGE_SEARCH: {search_term}]"
+                        else:
+                            history_answer = answer
                         
                         if not answer:
                             answer = "I'm sorry, I had trouble processing that. Could you try asking again?"
+                            history_answer = answer
                             
+                        # Display the text
                         st.markdown(answer)
+                        
+                        # Display the image if we found one!
+                        if image_url:
+                            try:
+                                st.image(image_url, caption=f"Visual Reference: {search_term}", use_container_width=True)
+                            except:
+                                st.caption(f"*(Attempted to load an image for {search_term}, but the link was invalid.)*")
+                        elif img_match:
+                             st.caption(f"*(Attempted to load an image for {search_term}, but could not find a clear match.)*")
                         
                         # Generate audio continuously in the SAME pass for the new message
                         is_voice_enabled_now = st.session_state.get("voice_toggle_widget", False)
@@ -735,7 +807,8 @@ if username and api_key:
                                 if audio_bytes:
                                     st.audio(audio_bytes, format='audio/mp3', autoplay=True)
                 
-                user_data["history"].append({"role": "model", "content": answer})
+                # Append the response (with the hidden tag intact for historical tracking) to memory
+                user_data["history"].append({"role": "model", "content": history_answer})
                 save_current_student(username, user_data)
                 st.session_state.unsummarized_messages += 2
 
