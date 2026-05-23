@@ -9,43 +9,18 @@ import re
 import gspread
 import threading
 import time
-import requests
+from duckduckgo_search import DDGS
 
-# --- NEW: WIKIMEDIA COMMONS SEARCH FUNCTION (THE REAL IMAGE DATABASE) ---
-def fetch_wikimedia_image(search_query):
-    '''Searches Wikimedia Commons directly for high-quality images.'''
-    url = "https://commons.wikimedia.org/w/api.php"
-    
-    # We append filetype:bitmap to ensure we get photos/diagrams, not PDFs or SVGs
-    clean_query = f"{search_query} filetype:bitmap"
-    
-    params = {
-        "action": "query",
-        "format": "json",
-        "generator": "search",
-        "gsrnamespace": 6,  # 6 is the 'File' namespace on Wikimedia Commons
-        "gsrsearch": clean_query,
-        "gsrlimit": 5,
-        "prop": "imageinfo",
-        "iiprop": "url"
-    }
-    
+# --- NEW: DUCKDUCKGO WEB IMAGE SEARCH (THE GOOGLE IMAGES ALTERNATIVE) ---
+def fetch_web_image(search_query):
+    '''Searches the live web for an image URL using DuckDuckGo, bypassing Wikipedia's strict tagging.'''
     try:
-        response = requests.get(url, params=params, timeout=5).json()
-        pages = response.get("query", {}).get("pages", {})
-        
-        if pages:
-            # Loop through the files returned
-            for page_id, page_data in pages.items():
-                image_info = page_data.get("imageinfo", [])
-                if image_info:
-                    img_url = image_info[0].get("url")
-                    # Double check it's not a stray vector or document
-                    if img_url and not img_url.lower().endswith(('.svg', '.pdf', '.djvu')):
-                        return img_url
-                        
+        # We search for the term and ask for just the top 1 result
+        results = DDGS().images(search_query, max_results=1)
+        if results and len(results) > 0:
+            return results[0].get('image')
     except Exception as e:
-        print(f"Wikimedia API Error: {e}")
+        print(f"Web Image Search Error: {e}")
         
     return None
 
@@ -274,7 +249,7 @@ def get_system_instruction(age, subject, history_summary, file_vault="", has_hid
         1. EXTREME WORD LIMIT: The student gets overwhelmed by text. NEVER write more than 3-4 short sentences per response. Use bullet points for any facts.
         2. MAXIMUM VISUALS: Let pictures do the talking. You can and should use the exact tag [IMAGE_SEARCH: Exact Topic Name] MULTIPLE times in a single response to explain different parts of a concept.
            - Example: "Here is a plant cell: [IMAGE_SEARCH: Plant cell diagram]. The mitochondria makes the power: [IMAGE_SEARCH: Mitochondria]."
-           - CRITICAL SEARCH RULE: Wikipedia cannot find pictures of abstract concepts (like "Gravity"). Search for concrete examples (like "Solar system orbits" or "Apple falling").
+           - SEARCH RULE: You are searching the live web for images. Search for concrete, real-world examples (like "Solar system orbits", "Apple falling", or "Tug of war game").
         3. NO AQA RULES: You are NOT an AQA examiner here. Do not mention Assessment Objectives, "AO1/AO2/AO3", or force "anti-PEEL" analysis.
         4. Voice/Tone: Warm, highly concise, and helpful. 
         '''
@@ -769,7 +744,7 @@ if username and api_key:
                         # Clean the raw answer of audio tags
                         answer = response.text.replace("🎤 Voice Response", "").replace("🎤 Voice response", "").replace("🎤 Voice Message", "").replace("🎤 [Voice Message]", "").replace("*[🎤 Voice Message]*", "").strip()
                         
-                        # --- NEW: MULTI-IMAGE WIKIMEDIA INTERCEPTOR ---
+                        # --- NEW: MULTI-IMAGE WEB INTERCEPTOR ---
                         # 1. Find ALL image requests in the text
                         img_matches = re.findall(r'\[IMAGE_SEARCH:\s*(.*?)\]', answer, re.IGNORECASE)
                         
@@ -782,13 +757,13 @@ if username and api_key:
                         # 3. Display the text first
                         st.markdown(display_answer)
                         
-                        # 4. Loop through and display every requested image
+                        # 4. Loop through and display every requested image using DuckDuckGo
                         history_tags = ""
                         if img_matches:
                             for search_term in img_matches:
                                 history_tags += f"\n\n[IMAGE_SEARCH: {search_term}]"
-                                with st.spinner(f"🔍 Fetching visual for '{search_term}'..."):
-                                    image_url = fetch_wikimedia_image(search_term)
+                                with st.spinner(f"🔍 Fetching web image for '{search_term}'..."):
+                                    image_url = fetch_web_image(search_term)
                                 
                                 if image_url:
                                     try:
