@@ -11,19 +11,23 @@ import threading
 import time
 import requests
 
-# --- NEW: WIKIMEDIA SEARCH FUNCTION (BULLETPROOF ROUTING) ---
+# --- NEW: WIKIMEDIA COMMONS SEARCH FUNCTION (THE REAL IMAGE DATABASE) ---
 def fetch_wikimedia_image(search_query):
-    '''Searches Wikipedia for a topic and returns the URL of its primary image.'''
-    url = "https://en.wikipedia.org/w/api.php"
+    '''Searches Wikimedia Commons directly for high-quality images.'''
+    url = "https://commons.wikimedia.org/w/api.php"
+    
+    # We append filetype:bitmap to ensure we get photos/diagrams, not PDFs or SVGs
+    clean_query = f"{search_query} filetype:bitmap"
+    
     params = {
         "action": "query",
         "format": "json",
         "generator": "search",
-        "gsrsearch": search_query,
-        "gsrlimit": 10,  # Grab the top 10 results to cast a massive net
-        "prop": "pageimages",
-        "piprop": "original|thumbnail",
-        "pithumbsize": 800
+        "gsrnamespace": 6,  # 6 is the 'File' namespace on Wikimedia Commons
+        "gsrsearch": clean_query,
+        "gsrlimit": 5,
+        "prop": "imageinfo",
+        "iiprop": "url"
     }
     
     try:
@@ -31,19 +35,15 @@ def fetch_wikimedia_image(search_query):
         pages = response.get("query", {}).get("pages", {})
         
         if pages:
-            # Loop through all 10 results looking for a valid photo
+            # Loop through the files returned
             for page_id, page_data in pages.items():
-                img_url = None
-                
-                if "original" in page_data:
-                    img_url = page_data["original"]["source"]
-                elif "thumbnail" in page_data:
-                    img_url = page_data["thumbnail"]["source"]
-                
-                # If we found a URL, make sure it's an actual photo, not a Wikipedia .svg icon!
-                if img_url and not img_url.lower().endswith('.svg'):
-                    return img_url
-                    
+                image_info = page_data.get("imageinfo", [])
+                if image_info:
+                    img_url = image_info[0].get("url")
+                    # Double check it's not a stray vector or document
+                    if img_url and not img_url.lower().endswith(('.svg', '.pdf', '.djvu')):
+                        return img_url
+                        
     except Exception as e:
         print(f"Wikimedia API Error: {e}")
         
