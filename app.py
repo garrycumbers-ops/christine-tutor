@@ -11,7 +11,7 @@ import threading
 import time
 import requests
 
-# --- NEW: WIKIMEDIA SEARCH FUNCTION (SMARTER ROUTING) ---
+# --- NEW: WIKIMEDIA SEARCH FUNCTION (BULLETPROOF ROUTING) ---
 def fetch_wikimedia_image(search_query):
     '''Searches Wikipedia for a topic and returns the URL of its primary image.'''
     url = "https://en.wikipedia.org/w/api.php"
@@ -20,10 +20,10 @@ def fetch_wikimedia_image(search_query):
         "format": "json",
         "generator": "search",
         "gsrsearch": search_query,
-        "gsrlimit": 3,  # 1. Grab the top 3 results instead of just 1
+        "gsrlimit": 10,  # Grab the top 10 results to cast a massive net
         "prop": "pageimages",
-        "piprop": "original|thumbnail",  # 2. Ask for both Original OR Thumbnail
-        "pithumbsize": 800  # 3. If it's a thumbnail, force it to be a large 800px width
+        "piprop": "original|thumbnail",
+        "pithumbsize": 800
     }
     
     try:
@@ -31,12 +31,18 @@ def fetch_wikimedia_image(search_query):
         pages = response.get("query", {}).get("pages", {})
         
         if pages:
-            # Loop through the top 3 results until we find one that actually has a picture
+            # Loop through all 10 results looking for a valid photo
             for page_id, page_data in pages.items():
+                img_url = None
+                
                 if "original" in page_data:
-                    return page_data["original"]["source"]
+                    img_url = page_data["original"]["source"]
                 elif "thumbnail" in page_data:
-                    return page_data["thumbnail"]["source"]
+                    img_url = page_data["thumbnail"]["source"]
+                
+                # If we found a URL, make sure it's an actual photo, not a Wikipedia .svg icon!
+                if img_url and not img_url.lower().endswith('.svg'):
+                    return img_url
                     
     except Exception as e:
         print(f"Wikimedia API Error: {e}")
