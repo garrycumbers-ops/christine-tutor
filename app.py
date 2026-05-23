@@ -11,7 +11,7 @@ import threading
 import time
 import requests
 
-# --- NEW: WIKIMEDIA SEARCH FUNCTION ---
+# --- NEW: WIKIMEDIA SEARCH FUNCTION (SMARTER ROUTING) ---
 def fetch_wikimedia_image(search_query):
     '''Searches Wikipedia for a topic and returns the URL of its primary image.'''
     url = "https://en.wikipedia.org/w/api.php"
@@ -20,18 +20,24 @@ def fetch_wikimedia_image(search_query):
         "format": "json",
         "generator": "search",
         "gsrsearch": search_query,
-        "gsrlimit": 1,
+        "gsrlimit": 3,  # 1. Grab the top 3 results instead of just 1
         "prop": "pageimages",
-        "piprop": "original"
+        "piprop": "original|thumbnail",  # 2. Ask for both Original OR Thumbnail
+        "pithumbsize": 800  # 3. If it's a thumbnail, force it to be a large 800px width
     }
     
     try:
         response = requests.get(url, params=params, timeout=5).json()
         pages = response.get("query", {}).get("pages", {})
+        
         if pages:
-            first_page = list(pages.values())[0]
-            image_url = first_page.get("original", {}).get("source")
-            return image_url
+            # Loop through the top 3 results until we find one that actually has a picture
+            for page_id, page_data in pages.items():
+                if "original" in page_data:
+                    return page_data["original"]["source"]
+                elif "thumbnail" in page_data:
+                    return page_data["thumbnail"]["source"]
+                    
     except Exception as e:
         print(f"Wikimedia API Error: {e}")
         
