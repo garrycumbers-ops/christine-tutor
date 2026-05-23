@@ -271,16 +271,12 @@ def get_system_instruction(age, subject, history_summary, file_vault="", has_hid
         {vault_text}
 
         CRITICAL TUTORING RULES:
-        1. Step-by-Step Scaffolding: Break complex concepts down into bite-sized steps. Do not overwhelm the student.
-        2. Visuals via Wikipedia: The student is a visual learner. If a concept would be easier to understand with a picture, output the exact tag [IMAGE_SEARCH: Exact Topic]. 
-           - CRITICAL SEARCH RULE: Wikipedia cannot find pictures of abstract concepts (like "Kinetic Energy" or "Gravity"). You MUST search for concrete, tangible examples. 
-           - BAD SEARCH: [IMAGE_SEARCH: Kinetic Energy]
-           - GOOD SEARCH: [IMAGE_SEARCH: Roller coaster] or [IMAGE_SEARCH: Pendulum]
-           - BAD SEARCH: [IMAGE_SEARCH: Gravity]
-           - GOOD SEARCH: [IMAGE_SEARCH: Solar system orbits]
-           - Rule: Only use this tag ONCE per message, and place it at the very bottom.
+        1. EXTREME WORD LIMIT: The student gets overwhelmed by text. NEVER write more than 3-4 short sentences per response. Use bullet points for any facts.
+        2. MAXIMUM VISUALS: Let pictures do the talking. You can and should use the exact tag [IMAGE_SEARCH: Exact Topic Name] MULTIPLE times in a single response to explain different parts of a concept.
+           - Example: "Here is a plant cell: [IMAGE_SEARCH: Plant cell diagram]. The mitochondria makes the power: [IMAGE_SEARCH: Mitochondria]."
+           - CRITICAL SEARCH RULE: Wikipedia cannot find pictures of abstract concepts (like "Gravity"). Search for concrete examples (like "Solar system orbits" or "Apple falling").
         3. NO AQA RULES: You are NOT an AQA examiner here. Do not mention Assessment Objectives, "AO1/AO2/AO3", or force "anti-PEEL" analysis.
-        4. Voice/Tone: Warm, clear, structured, and helpful. 
+        4. Voice/Tone: Warm, highly concise, and helpful. 
         '''
     
 def convert_history_for_gemini(history):
@@ -568,19 +564,16 @@ if username and api_key:
             role_display = "user" if msg["role"] == "user" else "assistant"
             with st.chat_message(role_display):
                 
-                # --- HISTORICAL WIKIMEDIA IMAGE RE-RENDER FIX ---
-                # Check if there is an image tag in the HISTORY, display it, then strip it.
+                # --- HISTORICAL WIKIMEDIA MULTI-IMAGE RE-RENDER FIX ---
                 display_content = msg["content"]
                 if role_display == "assistant":
-                    historical_img_match = re.search(r'\[IMAGE_SEARCH:\s*(.*?)\]', display_content, re.IGNORECASE)
-                    if historical_img_match:
-                        historical_search_term = historical_img_match.group(1).strip()
-                        display_content = re.sub(r'\[IMAGE_SEARCH:\s*.*?\]', '', display_content, flags=re.IGNORECASE).strip()
-                        st.markdown(display_content)
-                        # We don't fetch the image again from the API to save time, we just note it was there
-                        st.caption(f"*(Historical image reference: {historical_search_term})*")
-                    else:
-                        st.markdown(display_content)
+                    historical_img_matches = re.findall(r'\[IMAGE_SEARCH:\s*(.*?)\]', display_content, re.IGNORECASE)
+                    display_content = re.sub(r'\[IMAGE_SEARCH:\s*.*?\]', '', display_content, flags=re.IGNORECASE).strip()
+                    st.markdown(display_content)
+                    
+                    if historical_img_matches:
+                        for term in historical_img_matches:
+                            st.caption(f"*(Historical image reference: {term})*")
                 else:
                     st.markdown(display_content)
                 
@@ -776,53 +769,49 @@ if username and api_key:
                         # Clean the raw answer of audio tags
                         answer = response.text.replace("🎤 Voice Response", "").replace("🎤 Voice response", "").replace("🎤 Voice Message", "").replace("🎤 [Voice Message]", "").replace("*[🎤 Voice Message]*", "").strip()
                         
-                        # --- NEW: WIKIMEDIA IMAGE INTERCEPTOR ---
-                        image_url = None
-                        img_match = re.search(r'\[IMAGE_SEARCH:\s*(.*?)\]', answer, re.IGNORECASE)
+                        # --- NEW: MULTI-IMAGE WIKIMEDIA INTERCEPTOR ---
+                        # 1. Find ALL image requests in the text
+                        img_matches = re.findall(r'\[IMAGE_SEARCH:\s*(.*?)\]', answer, re.IGNORECASE)
                         
-                        if img_match:
-                            # 1. Extract the search term
-                            search_term = img_match.group(1).strip()
-                            
-                            # 2. Fetch the image URL in the background
-                            with st.spinner(f"🔍 Searching visual archives for '{search_term}'..."):
-                                image_url = fetch_wikimedia_image(search_term)
-                            
-                            # 3. Erase the secret tag from the text the student sees so the audio player won't read it
-                            answer = re.sub(r'\[IMAGE_SEARCH:\s*.*?\]', '', answer, flags=re.IGNORECASE).strip()
-                            
-                            # Keep the tag in history so we can note it later, but format it nicely here
-                            history_answer = answer + f"\n\n[IMAGE_SEARCH: {search_term}]"
-                        else:
-                            history_answer = answer
+                        # 2. Erase the secret tags from the text the student sees
+                        display_answer = re.sub(r'\[IMAGE_SEARCH:\s*.*?\]', '', answer, flags=re.IGNORECASE).strip()
                         
-                        if not answer:
-                            answer = "I'm sorry, I had trouble processing that. Could you try asking again?"
-                            history_answer = answer
+                        if not display_answer:
+                            display_answer = "Here is what I found for you:"
                             
-                        # Display the text
-                        st.markdown(answer)
+                        # 3. Display the text first
+                        st.markdown(display_answer)
                         
-                        # Display the image if we found one!
-                        if image_url:
-                            try:
-                                st.image(image_url, caption=f"Visual Reference: {search_term}", use_container_width=True)
-                            except:
-                                st.caption(f"*(Attempted to load an image for {search_term}, but the link was invalid.)*")
-                        elif img_match:
-                             st.caption(f"*(Attempted to load an image for {search_term}, but could not find a clear match.)*")
+                        # 4. Loop through and display every requested image
+                        history_tags = ""
+                        if img_matches:
+                            for search_term in img_matches:
+                                history_tags += f"\n\n[IMAGE_SEARCH: {search_term}]"
+                                with st.spinner(f"🔍 Fetching visual for '{search_term}'..."):
+                                    image_url = fetch_wikimedia_image(search_term)
+                                
+                                if image_url:
+                                    try:
+                                        st.image(image_url, caption=f"Visual Reference: {search_term}", use_container_width=True)
+                                    except:
+                                        st.caption(f"*(Attempted to load an image for {search_term}, but the link was invalid.)*")
+                                else:
+                                    st.caption(f"*(Attempted to load an image for {search_term}, but could not find a clear match.)*")
+                        
+                        history_answer = display_answer + history_tags
                         
                         # Generate audio continuously in the SAME pass for the new message
                         is_voice_enabled_now = st.session_state.get("voice_toggle_widget", False)
                         if is_voice_enabled_now:
-                            clean_speech = clean_text_for_speech(answer)
+                            # CRITICAL: We pass display_answer so the TTS engine doesn't read the tags!
+                            clean_speech = clean_text_for_speech(display_answer)
                             if clean_speech: 
                                 with st.spinner("🎙️ Generating voice..."):
                                     audio_bytes = generate_audio_bytes(clean_speech)
                                 if audio_bytes:
                                     st.audio(audio_bytes, format='audio/mp3', autoplay=True)
                 
-                # Append the response (with the hidden tag intact for historical tracking) to memory
+                # Append the response (with the hidden tags intact for historical tracking) to memory
                 user_data["history"].append({"role": "model", "content": history_answer})
                 save_current_student(username, user_data)
                 st.session_state.unsummarized_messages += 2
