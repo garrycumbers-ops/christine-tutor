@@ -9,18 +9,35 @@ import re
 import gspread
 import threading
 import time
-from duckduckgo_search import DDGS
+import requests
 
-# --- NEW: DUCKDUCKGO WEB IMAGE SEARCH (THE GOOGLE IMAGES ALTERNATIVE) ---
-def fetch_web_image(search_query):
-    '''Searches the live web for an image URL using DuckDuckGo, bypassing Wikipedia's strict tagging.'''
+# --- NEW: GOOGLE CUSTOM SEARCH API (OFFICIAL IMAGES) ---
+def fetch_google_image(search_query):
+    '''Searches Google Images using the official Custom Search JSON API.'''
+    # Grab the keys from Streamlit secrets
+    api_key = st.secrets.get("GOOGLE_SEARCH_API_KEY", None)
+    cx = st.secrets.get("GOOGLE_SEARCH_CX", None)
+    
+    if not api_key or not cx:
+        print("Missing Google Search API keys in secrets.")
+        return None
+
+    url = "https://customsearch.googleapis.com/customsearch/v1"
+    params = {
+        "q": search_query,
+        "cx": cx,
+        "key": api_key,
+        "searchType": "image",
+        "num": 1,
+        "safe": "active"  # Safe search ON for education
+    }
+    
     try:
-        # We search for the term and ask for just the top 1 result
-        results = DDGS().images(search_query, max_results=1)
-        if results and len(results) > 0:
-            return results[0].get('image')
+        response = requests.get(url, params=params, timeout=5).json()
+        if "items" in response and len(response["items"]) > 0:
+            return response["items"][0]["link"]
     except Exception as e:
-        print(f"Web Image Search Error: {e}")
+        print(f"Google Image Search Error: {e}")
         
     return None
 
@@ -248,8 +265,8 @@ def get_system_instruction(age, subject, history_summary, file_vault="", has_hid
         CRITICAL TUTORING RULES:
         1. EXTREME WORD LIMIT: The student gets overwhelmed by text. NEVER write more than 3-4 short sentences per response. Use bullet points for any facts.
         2. MAXIMUM VISUALS: Let pictures do the talking. You can and should use the exact tag [IMAGE_SEARCH: Exact Topic Name] MULTIPLE times in a single response to explain different parts of a concept.
-           - Example: "Here is a plant cell: [IMAGE_SEARCH: Plant cell diagram]. The mitochondria makes the power: [IMAGE_SEARCH: Mitochondria]."
-           - SEARCH RULE: You are searching the live web for images. Search for concrete, real-world examples (like "Solar system orbits", "Apple falling", or "Tug of war game").
+           - Example: "Here is a plant cell: [IMAGE_SEARCH: Plant cell diagram]. The mitochondria makes the power: [IMAGE_SEARCH: Mitochondria diagram]."
+           - SEARCH RULE: You are searching Google Images. Search for concrete, real-world examples (like "Solar system orbits map", "Apple falling physics", or "Tug of war game"). Use the word "diagram" if you need a labeled chart.
         3. NO AQA RULES: You are NOT an AQA examiner here. Do not mention Assessment Objectives, "AO1/AO2/AO3", or force "anti-PEEL" analysis.
         4. Voice/Tone: Warm, highly concise, and helpful. 
         '''
@@ -265,6 +282,11 @@ def convert_history_for_gemini(history):
 
 # --- MAIN APP UI ---
 st.title("🎓 Christine: AI Tutor")
+
+# Check for Google Image Search keys and warn in UI if missing
+missing_google_keys = False
+if not st.secrets.get("GOOGLE_SEARCH_API_KEY") or not st.secrets.get("GOOGLE_SEARCH_CX"):
+    missing_google_keys = True
 
 # --- SESSION STATE SETUP ---
 if "camera_open" not in st.session_state: st.session_state.camera_open = False
@@ -359,6 +381,9 @@ if username and api_key:
         selected_topic = st.sidebar.selectbox("Current Topic:", topic_list, index=topic_index)
         
         current_subject = f"{selected_course}: {selected_topic}"
+        
+        if missing_google_keys and not any(kw in current_subject.lower() for kw in ["english", "literature", "poetry", "language", "aqa"]):
+             st.sidebar.warning("⚠️ Google Image API keys missing. Pictures will not load for STEM/History.")
       
         # --- NO-RERUN TOPIC SWITCH LOGIC FIX ---
         if current_subject != user_data.get("last_topic"):
@@ -539,7 +564,7 @@ if username and api_key:
             role_display = "user" if msg["role"] == "user" else "assistant"
             with st.chat_message(role_display):
                 
-                # --- HISTORICAL WIKIMEDIA MULTI-IMAGE RE-RENDER FIX ---
+                # --- HISTORICAL GOOGLE MULTI-IMAGE RE-RENDER FIX ---
                 display_content = msg["content"]
                 if role_display == "assistant":
                     historical_img_matches = re.findall(r'\[IMAGE_SEARCH:\s*(.*?)\]', display_content, re.IGNORECASE)
@@ -744,7 +769,7 @@ if username and api_key:
                         # Clean the raw answer of audio tags
                         answer = response.text.replace("🎤 Voice Response", "").replace("🎤 Voice response", "").replace("🎤 Voice Message", "").replace("🎤 [Voice Message]", "").replace("*[🎤 Voice Message]*", "").strip()
                         
-                        # --- NEW: MULTI-IMAGE WEB INTERCEPTOR ---
+                        # --- NEW: MULTI-IMAGE GOOGLE API INTERCEPTOR ---
                         # 1. Find ALL image requests in the text
                         img_matches = re.findall(r'\[IMAGE_SEARCH:\s*(.*?)\]', answer, re.IGNORECASE)
                         
@@ -757,13 +782,13 @@ if username and api_key:
                         # 3. Display the text first
                         st.markdown(display_answer)
                         
-                        # 4. Loop through and display every requested image using DuckDuckGo
+                        # 4. Loop through and display every requested image using Google API
                         history_tags = ""
                         if img_matches:
                             for search_term in img_matches:
                                 history_tags += f"\n\n[IMAGE_SEARCH: {search_term}]"
-                                with st.spinner(f"🔍 Fetching web image for '{search_term}'..."):
-                                    image_url = fetch_web_image(search_term)
+                                with st.spinner(f"🔍 Fetching Google Image for '{search_term}'..."):
+                                    image_url = fetch_google_image(search_term)
                                 
                                 if image_url:
                                     try:
@@ -771,7 +796,7 @@ if username and api_key:
                                     except:
                                         st.caption(f"*(Attempted to load an image for {search_term}, but the link was invalid.)*")
                                 else:
-                                    st.caption(f"*(Attempted to load an image for {search_term}, but could not find a clear match.)*")
+                                    st.caption(f"*(Attempted to load an image for {search_term}, but could not find a match or keys are missing.)*")
                         
                         history_answer = display_answer + history_tags
                         
