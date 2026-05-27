@@ -11,14 +11,25 @@ import threading
 import time
 from duckduckgo_search import DDGS
 
-# --- NEW: DUCKDUCKGO WEB IMAGE SEARCH (THE GOOGLE IMAGES ALTERNATIVE) ---
+# --- NEW: DUCKDUCKGO WEB IMAGE SEARCH (WITH FALLBACK) ---
 def fetch_web_image(search_query):
-    '''Searches the live web for an image URL using DuckDuckGo, bypassing Wikipedia's strict tagging.'''
+    '''Searches the live web for an image URL using DuckDuckGo, with a fallback for long queries.'''
     try:
-        # We search for the term and ask for just the top 1 result
-        results = DDGS().images(search_query, max_results=1)
+        # Try the original query first
+        results = DDGS().images(search_query, max_results=3)
         if results and len(results) > 0:
-            return results[0].get('image')
+            for r in results:
+                if r.get('image'): return r.get('image')
+                
+        # FALLBACK: If Christine was too descriptive, just search the first 2-3 words
+        words = search_query.split()
+        if len(words) > 2:
+            short_query = " ".join(words[:2]) + " diagram"
+            short_results = DDGS().images(short_query, max_results=3)
+            if short_results and len(short_results) > 0:
+                for r in short_results:
+                    if r.get('image'): return r.get('image')
+                    
     except Exception as e:
         print(f"Web Image Search Error: {e}")
         
@@ -248,8 +259,10 @@ def get_system_instruction(age, subject, history_summary, file_vault="", has_hid
         CRITICAL TUTORING RULES:
         1. EXTREME WORD LIMIT: The student gets overwhelmed by text. NEVER write more than 3-4 short sentences per response. Use bullet points for any facts.
         2. MAXIMUM VISUALS: Let pictures do the talking. You can and should use the exact tag [IMAGE_SEARCH: Exact Topic Name] MULTIPLE times in a single response to explain different parts of a concept.
-           - Example: "Here is a plant cell: [IMAGE_SEARCH: Plant cell diagram]. The mitochondria makes the power: [IMAGE_SEARCH: Mitochondria]."
-           - SEARCH RULE: You are searching the live web for images. Search for concrete, real-world examples (like "Solar system orbits", "Apple falling", or "Tug of war game").
+           - Example: "Here is a plant cell: [IMAGE_SEARCH: Plant cell]. The mitochondria makes the power: [IMAGE_SEARCH: Mitochondria]."
+           - CRITICAL SEARCH RULE: Search terms MUST be ultra-short, simple nouns (1 to 3 words max). Do NOT use descriptive sentences! 
+           - BAD SEARCH: [IMAGE_SEARCH: Ice melting into water with weights]
+           - GOOD SEARCH: [IMAGE_SEARCH: Melting ice]
         3. NO AQA RULES: You are NOT an AQA examiner here. Do not mention Assessment Objectives, "AO1/AO2/AO3", or force "anti-PEEL" analysis.
         4. Voice/Tone: Warm, highly concise, and helpful. 
         '''
