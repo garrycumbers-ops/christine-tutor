@@ -12,9 +12,10 @@ import time
 import requests
 from duckduckgo_search import DDGS
 
-# --- NEW: HYBRID IMAGE ENGINE (DDG + WIKIMEDIA FALLBACK) ---
+# --- NEW: HYBRID IMAGE ENGINE (SMART DOUBLE-FALLBACK) ---
 def fetch_web_image(search_query):
-    '''Tries DuckDuckGo first. If blocked or empty, falls back to Wikimedia Commons.'''
+    '''Tries DuckDuckGo first. If blocked, tries Wikimedia. If that fails, simplifies the query and tries again.'''
+    
     # STEP 1: Try DuckDuckGo
     try:
         results = DDGS().images(search_query, max_results=3, safesearch='Moderate')
@@ -34,34 +35,48 @@ def fetch_web_image(search_query):
         print(f"DDG Search Error: {e}")
         
     # STEP 2: Fallback to Wikimedia Commons (100% reliable for basic nouns)
-    try:
-        print(f"DDG failed for '{search_query}'. Trying Wikimedia Commons...")
-        url = "https://commons.wikimedia.org/w/api.php"
-        clean_query = f"{search_query} filetype:bitmap"
-        params = {
-            "action": "query",
-            "format": "json",
-            "generator": "search",
-            "gsrnamespace": 6,
-            "gsrsearch": clean_query,
-            "gsrlimit": 3,
-            "prop": "imageinfo",
-            "iiprop": "url"
-        }
-        
-        response = requests.get(url, params=params, timeout=5).json()
-        pages = response.get("query", {}).get("pages", {})
-        
-        if pages:
-            for page_id, page_data in pages.items():
-                image_info = page_data.get("imageinfo", [])
-                if image_info:
-                    img_url = image_info[0].get("url")
-                    if img_url and not img_url.lower().endswith(('.svg', '.pdf', '.djvu')):
-                        return img_url
-    except Exception as e:
-        print(f"Wikimedia API Error: {e}")
-        
+    def ask_wikimedia(query):
+        try:
+            url = "https://commons.wikimedia.org/w/api.php"
+            clean_query = f"{query} filetype:bitmap"
+            params = {
+                "action": "query",
+                "format": "json",
+                "generator": "search",
+                "gsrnamespace": 6,
+                "gsrsearch": clean_query,
+                "gsrlimit": 3,
+                "prop": "imageinfo",
+                "iiprop": "url"
+            }
+            
+            response = requests.get(url, params=params, timeout=5).json()
+            pages = response.get("query", {}).get("pages", {})
+            
+            if pages:
+                for page_id, page_data in pages.items():
+                    image_info = page_data.get("imageinfo", [])
+                    if image_info:
+                        img_url = image_info[0].get("url")
+                        if img_url and not img_url.lower().endswith(('.svg', '.pdf', '.djvu')):
+                            return img_url
+        except Exception as e:
+            print(f"Wikimedia API Error: {e}")
+        return None
+
+    # Try full query on Wikimedia
+    print(f"DDG failed for '{search_query}'. Trying Wikimedia Commons...")
+    wiki_img = ask_wikimedia(search_query)
+    if wiki_img: return wiki_img
+    
+    # Try simplified query on Wikimedia (strips adjectives like "basic" or "diagram")
+    words = search_query.split()
+    if len(words) > 1:
+        short_wiki_query = " ".join(words[:2])
+        print(f"Full Wiki query failed. Retrying with: '{short_wiki_query}'...")
+        short_wiki_img = ask_wikimedia(short_wiki_query)
+        if short_wiki_img: return short_wiki_img
+
     return None
 
 # --- NEW: AQA RUBRIC LOADER ---
@@ -803,7 +818,9 @@ if username and api_key:
                         history_tags = ""
                         if img_matches:
                             for search_term in img_matches:
-                                history_tags += f"\n\n[IMAGE_SEARCH: {search_term}]"
+                                history_tags += f"
+
+[IMAGE_SEARCH: {search_term}]"
                                 with st.spinner(f"🔍 Fetching web image for '{search_term}'..."):
                                     image_url = fetch_web_image(search_term)
                                 
