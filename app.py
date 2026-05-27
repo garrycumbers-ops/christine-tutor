@@ -12,9 +12,9 @@ import time
 import requests
 from duckduckgo_search import DDGS
 
-# --- NEW: HYBRID IMAGE ENGINE WITH LIVE UI DEBUGGING ---
+# --- NEW: HYBRID IMAGE ENGINE WITH WIKIPEDIA ARTICLE API ---
 def fetch_web_image(search_query):
-    """Tries DuckDuckGo first. If blocked, tries Wikimedia. If that fails, simplifies the query and tries again."""
+    '''Tries DuckDuckGo first. If blocked, searches Wikipedia articles for their main thumbnail.'''
     
     # STEP 1: Try DuckDuckGo
     try:
@@ -31,62 +31,61 @@ def fetch_web_image(search_query):
         words = search_query.split()
         if len(words) > 2:
             short_query = " ".join(words[:2])
-            st.write(f"✂️ **DuckDuckGo Fallback:** Chopping query down to `[{short_query}]`...")
+            st.write(f"✂️ **DuckDuckGo Fallback:** Chopping query to `[{short_query}]`...")
             short_results = DDGS().images(short_query, max_results=3)
             if not short_results:
                  st.write("⚠️ *DuckDuckGo fallback returned 0 results.*")
             if short_results and len(short_results) > 0:
-                st.write(f"✅ *DuckDuckGo fallback found {len(short_results)} images!*")
+                st.write(f"✅ *DuckDuckGo fallback found images!*")
                 for r in short_results:
                     if r.get('image'): return r.get('image')
     except Exception as e:
         st.write(f"🛑 *DuckDuckGo Crash Error: {e}*")
         
-    # STEP 2: Fallback to Wikimedia Commons
-    def ask_wikimedia(query):
+    # STEP 2: Fallback to Wikipedia Article Images (Highly reliable)
+    def ask_wikipedia(query):
         try:
-            st.write(f"🏛️ **Wikimedia Commons:** Searching for `[{query}]`...")
-            url = "https://commons.wikimedia.org/w/api.php"
-            clean_query = f"{query} filetype:bitmap"
+            st.write(f"🌍 **Wikipedia:** Searching for article about `[{query}]`...")
+            url = "https://en.wikipedia.org/w/api.php"
             params = {
                 "action": "query",
                 "format": "json",
                 "generator": "search",
-                "gsrnamespace": 6,
-                "gsrsearch": clean_query,
-                "gsrlimit": 3,
-                "prop": "imageinfo",
-                "iiprop": "url"
+                "gsrsearch": query,
+                "gsrlimit": 1,
+                "prop": "pageimages",
+                "pithumbsize": 800
             }
             
             response = requests.get(url, params=params, timeout=5).json()
             pages = response.get("query", {}).get("pages", {})
             
             if not pages:
-                 st.write("⚠️ *Wikimedia returned 0 matches.*")
+                 st.write("⚠️ *Wikipedia returned 0 matching articles.*")
+                 return None
                  
-            if pages:
-                st.write(f"✅ *Wikimedia found {len(pages)} matching files!*")
-                for page_id, page_data in pages.items():
-                    image_info = page_data.get("imageinfo", [])
-                    if image_info:
-                        img_url = image_info[0].get("url")
-                        if img_url and not img_url.lower().endswith(('.svg', '.pdf', '.djvu')):
-                            return img_url
+            for page_id, page_data in pages.items():
+                if "thumbnail" in page_data:
+                    img_url = page_data["thumbnail"].get("source")
+                    title = page_data.get('title', 'Unknown')
+                    st.write(f"✅ *Wikipedia found an image from the article: '{title}'!*")
+                    return img_url
+            
+            st.write("⚠️ *Wikipedia found the article, but it has no main image.*")
         except Exception as e:
-            st.write(f"🛑 *Wikimedia API Error: {e}*")
+            st.write(f"🛑 *Wikipedia API Error: {e}*")
         return None
 
-    # Try full query on Wikimedia
-    wiki_img = ask_wikimedia(search_query)
+    # Try full query
+    wiki_img = ask_wikipedia(search_query)
     if wiki_img: return wiki_img
     
-    # Try simplified query on Wikimedia 
+    # Try just the core noun (first word)
     words = search_query.split()
     if len(words) > 1:
-        short_wiki_query = " ".join(words[:2])
-        st.write(f"✂️ **Wikimedia Fallback:** Chopping query down to `[{short_wiki_query}]`...")
-        short_wiki_img = ask_wikimedia(short_wiki_query)
+        short_wiki_query = words[0]
+        st.write(f"✂️ **Wikipedia Fallback:** Chopping query to single word `[{short_wiki_query}]`...")
+        short_wiki_img = ask_wikipedia(short_wiki_query)
         if short_wiki_img: return short_wiki_img
 
     return None
@@ -206,7 +205,7 @@ if not api_key:
 
 # --- PURE gTTS AUDIO GENERATOR ---
 def generate_audio_bytes(text):
-    """Uses synchronous gTTS. 100% crash proof inside Streamlit."""
+    '''Uses synchronous gTTS. 100% crash proof inside Streamlit.'''
     try:
         safe_text = text[:1500] 
         tts = gTTS(text=safe_text, lang='en', tld='co.uk')
@@ -227,7 +226,7 @@ def clean_text_for_speech(text):
 
 # --- BACKGROUND DOSSIER SAVER (INACTIVITY TIMER) ---
 def background_dossier_save(username, chat_history_str, selected_topic):
-    """Runs silently in a background thread when the student stops typing for 5 minutes."""
+    '''Runs silently in a background thread when the student stops typing for 5 minutes.'''
     try:
         db = load_data()
         if username not in db: return
@@ -235,7 +234,7 @@ def background_dossier_save(username, chat_history_str, selected_topic):
         
         summary_model = genai.GenerativeModel(model_name=FALLBACK_MODEL)
         
-        memory_prompt = f"""
+        memory_prompt = f'''
         You are an expert teacher maintaining a highly compressed, long-term dossier on a student.
         CURRENT DOSSIER: {user_data.get('summary', '')}
         RECENT CHAT: {chat_history_str}
@@ -248,7 +247,7 @@ def background_dossier_save(username, chat_history_str, selected_topic):
         3. GAP TAGS: Start new or updated lines with exact format: [{selected_topic}] GAP:
         4. PRUNE: If they master a previous GAP in {selected_topic}, delete that specific GAP tag. 
         5. DOCUMENT PROGRESS: If they are working on a saved document, explicitly state which specific questions or paragraphs they have ALREADY finished.
-        """
+        '''
         response = summary_model.generate_content(memory_prompt)
         user_data["summary"] = response.text.strip()
         
@@ -266,16 +265,22 @@ def get_system_instruction(age, subject, history_summary, file_vault="", has_hid
 
     # 2. Handle the Student's Personal Vault
     if file_vault:
-        vault_text = f"\n\nSAVED STUDENT DOCUMENT:\nThe student has saved this document to memory:\n{file_vault}"
+        vault_text = f"
+
+SAVED STUDENT DOCUMENT:
+The student has saved this document to memory:
+{file_vault}"
     elif has_hidden_vault:
-        vault_text = "\n\n[SYSTEM NOTE: The student has a large document saved, but it is TURNED OFF.]"
+        vault_text = "
+
+[SYSTEM NOTE: The student has a large document saved, but it is TURNED OFF.]"
     else:
         vault_text = ""
 
     if is_english:
         # ENGLISH / LITERATURE -> Strict AQA Examiner Persona
         aqa_knowledge = st.session_state.get("aqa_knowledge", "[System: AQA Rubric file missing.]")
-        return f"""
+        return f'''
         You are "Christine," an elite Socratic AQA GCSE English Tutor specializing in pushing students from Grade 5s to Grade 9s.
 
         USER PROFILE:
@@ -300,10 +305,10 @@ def get_system_instruction(age, subject, history_summary, file_vault="", has_hid
         4. AQA Marker Persona: When reviewing answers, explicitly map their successes or gaps to the AQA Assessment Objectives (AO1, AO2, AO3) listed in your Knowledge Base. Quote the examiner reports to them if they make common mistakes.
         5. Anti-PEEL: Discourage robotic structures and force perceptive, conceptual tracking.
         6. Voice/Tone: Academic, rigorously challenging, yet encouraging. Never use emojis. NEVER start your response with a microphone emoji.
-        """
+        '''
     else:
         # STEM / HISTORY -> Visual Memory Coach
-        return f"""
+        return f'''
         You are "Christine," an empathetic General Memory Coach and Tutor for STEM, History, and other non-literary subjects.
 
         USER PROFILE:
@@ -321,7 +326,7 @@ def get_system_instruction(age, subject, history_summary, file_vault="", has_hid
            - GOOD SEARCH: [IMAGE_SEARCH: Melting ice]
         3. NO AQA RULES: You are NOT an AQA examiner here. Do not mention Assessment Objectives, "AO1/AO2/AO3", or force "anti-PEEL" analysis.
         4. Voice/Tone: Warm, highly concise, and helpful. 
-        """
+        '''
     
 def convert_history_for_gemini(history):
     gemini_history = []
@@ -559,7 +564,9 @@ if username and api_key:
                             st.sidebar.error("Error: The AI could not extract any text from this file.")
                         else:
                             if len(extracted_text) > 35000:
-                                extracted_text = extracted_text[:35000] + "\n\n[SYSTEM WARNING: Document reached the maximum database size. The end of the document was truncated.]"
+                                extracted_text = extracted_text[:35000] + "
+
+[SYSTEM WARNING: Document reached the maximum database size. The end of the document was truncated.]"
                                 
                             user_data["file_vault"] = extracted_text
                             save_current_student(username, user_data)
@@ -576,7 +583,7 @@ if username and api_key:
                     grab_count = st.session_state.unsummarized_messages
                     recent_chat = str(user_data["history"][-grab_count:]) 
                     
-                    memory_prompt = f"""
+                    memory_prompt = f'''
                     You are an expert teacher maintaining a highly compressed, long-term dossier on a student.
                     CURRENT DOSSIER: {user_data.get('summary', '')}
                     RECENT CHAT: {recent_chat}
@@ -589,7 +596,7 @@ if username and api_key:
                     3. GAP TAGS: Start new or updated lines with exact format: [{selected_topic}] GAP:
                     4. PRUNE: If they master a previous GAP in {selected_topic}, delete that specific GAP tag. 
                     5. DOCUMENT PROGRESS: If they are working on a saved document, explicitly state which specific questions or paragraphs they have ALREADY finished.
-                    """
+                    '''
                     try:
                         analyzer = genai.GenerativeModel(model_name="gemini-1.5-flash-8b")
                         memory_response = analyzer.generate_content(memory_prompt)
@@ -608,7 +615,7 @@ if username and api_key:
             role_display = "user" if msg["role"] == "user" else "assistant"
             with st.chat_message(role_display):
                 
-                # --- HISTORICAL WIKIMEDIA MULTI-IMAGE RE-RENDER FIX ---
+                # --- HISTORICAL WIKIPEDIA MULTI-IMAGE RE-RENDER FIX ---
                 display_content = msg["content"]
                 if role_display == "assistant":
                     historical_img_matches = re.findall(r'\[IMAGE_SEARCH:\s*(.*?)\]', display_content, re.IGNORECASE)
@@ -716,11 +723,11 @@ if username and api_key:
                         current_turn_content.append(pil_image)
                     
                     if image_action == "Review my essay/paragraph (AQA Mark Scheme)":
-                        action_prompt = """SYSTEM OVERRIDE: Act as a strict AQA Examiner. Do NOT rewrite the essay. Tell me which AOs (AO1, AO2, AO3) I am hitting, find the weakest sentence, and ask a Socratic question to force me to elevate it."""
+                        action_prompt = '''SYSTEM OVERRIDE: Act as a strict AQA Examiner. Do NOT rewrite the essay. Tell me which AOs (AO1, AO2, AO3) I am hitting, find the weakest sentence, and ask a Socratic question to force me to elevate it.'''
                     elif image_action == "Socratic Extract Analysis (Guide me)":
                         action_prompt = "SYSTEM OVERRIDE: Analyze this extract. Do not give me answers. Ask the first Socratic question about the writer's methods to begin analysis."
                     elif image_action == "Blind Analysis Practice (Unseen Text)":
-                        action_prompt = """SYSTEM OVERRIDE: Treat this as an AQA 'Unseen' text. Give me ZERO context. Ask a question forcing me to build a literary map from scratch based only on the language."""
+                        action_prompt = '''SYSTEM OVERRIDE: Treat this as an AQA 'Unseen' text. Give me ZERO context. Ask a question forcing me to build a literary map from scratch based only on the language.'''
                     elif image_action == "Help me upgrade my vocabulary/argument":
                         action_prompt = "SYSTEM OVERRIDE: Help me move away from basic PEEL paragraphs. Ask me a highly perceptive question about the overarching theme."
                     else:
