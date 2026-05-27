@@ -5,5 +5,5 @@ gTTS
 gspread
 PyPDF2
 edge-tts
+duckduckgo-search
 requests
-duckduckgo-search>=6.1.7
