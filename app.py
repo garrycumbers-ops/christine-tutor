@@ -9,29 +9,58 @@ import re
 import gspread
 import threading
 import time
+import requests
 from duckduckgo_search import DDGS
 
-# --- NEW: DUCKDUCKGO WEB IMAGE SEARCH (WITH FALLBACK) ---
+# --- NEW: HYBRID IMAGE ENGINE (DDG + WIKIMEDIA FALLBACK) ---
 def fetch_web_image(search_query):
-    '''Searches the live web for an image URL using DuckDuckGo, with a fallback for long queries.'''
+    '''Tries DuckDuckGo first. If blocked or empty, falls back to Wikimedia Commons.'''
+    # STEP 1: Try DuckDuckGo
     try:
-        # Try the original query first
-        results = DDGS().images(search_query, max_results=3)
+        results = DDGS().images(search_query, max_results=3, safesearch='Moderate')
         if results and len(results) > 0:
             for r in results:
                 if r.get('image'): return r.get('image')
                 
-        # FALLBACK: If Christine was too descriptive, just search the first 2-3 words
+        # If the search was too long, try shortening it for DDG
         words = search_query.split()
         if len(words) > 2:
-            short_query = " ".join(words[:2]) + " diagram"
+            short_query = " ".join(words[:2])
             short_results = DDGS().images(short_query, max_results=3)
             if short_results and len(short_results) > 0:
                 for r in short_results:
                     if r.get('image'): return r.get('image')
-                    
     except Exception as e:
-        print(f"Web Image Search Error: {e}")
+        print(f"DDG Search Error: {e}")
+        
+    # STEP 2: Fallback to Wikimedia Commons (100% reliable for basic nouns)
+    try:
+        print(f"DDG failed for '{search_query}'. Trying Wikimedia Commons...")
+        url = "https://commons.wikimedia.org/w/api.php"
+        clean_query = f"{search_query} filetype:bitmap"
+        params = {
+            "action": "query",
+            "format": "json",
+            "generator": "search",
+            "gsrnamespace": 6,
+            "gsrsearch": clean_query,
+            "gsrlimit": 3,
+            "prop": "imageinfo",
+            "iiprop": "url"
+        }
+        
+        response = requests.get(url, params=params, timeout=5).json()
+        pages = response.get("query", {}).get("pages", {})
+        
+        if pages:
+            for page_id, page_data in pages.items():
+                image_info = page_data.get("imageinfo", [])
+                if image_info:
+                    img_url = image_info[0].get("url")
+                    if img_url and not img_url.lower().endswith(('.svg', '.pdf', '.djvu')):
+                        return img_url
+    except Exception as e:
+        print(f"Wikimedia API Error: {e}")
         
     return None
 
