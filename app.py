@@ -623,7 +623,7 @@ if username and api_key:
                                     st.audio(audio_bytes, format='audio/mp3', autoplay=True)
 
         # --- INPUT & PROCESSING ---
-        st.markdown("""
+        st.markdown(\"""
             <style>
             [data-testid="stHeader"] {
                 position: fixed !important;
@@ -638,7 +638,7 @@ if username and api_key:
             }
             .block-container { padding-bottom: 180px !important; } 
             </style>
-            """, unsafe_allow_html=True)
+            \""", unsafe_allow_html=True)
 
         user_audio = st.audio_input("🎤 Talk to Christine")
         user_text = st.chat_input("...or type your question here")
@@ -818,9 +818,7 @@ if username and api_key:
                         history_tags = ""
                         if img_matches:
                             for search_term in img_matches:
-                                history_tags += f"
-
-[IMAGE_SEARCH: {search_term}]"
+                                history_tags += f"\n\n[IMAGE_SEARCH: {search_term}]"
                                 with st.spinner(f"🔍 Fetching web image for '{search_term}'..."):
                                     image_url = fetch_web_image(search_term)
                                 
