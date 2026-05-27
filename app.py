@@ -196,7 +196,7 @@ def save_current_student(name, data):
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Christine AI Tutor", page_icon="🎓", layout="wide")
 
-PRIMARY_MODEL = "gemini-2.5-flash"
+PRIMARY_MODEL = "gemini-2.5-pro"
 FALLBACK_MODEL = "gemini-2.5-flash-lite"
 
 api_key = st.secrets.get("GEMINI_API_KEY", None)
@@ -265,15 +265,9 @@ def get_system_instruction(age, subject, history_summary, file_vault="", has_hid
 
     # 2. Handle the Student's Personal Vault
     if file_vault:
-        vault_text = f"
-
-SAVED STUDENT DOCUMENT:
-The student has saved this document to memory:
-{file_vault}"
+        vault_text = f'''\n\nSAVED STUDENT DOCUMENT:\nThe student has saved this document to memory:\n{file_vault}'''
     elif has_hidden_vault:
-        vault_text = "
-
-[SYSTEM NOTE: The student has a large document saved, but it is TURNED OFF.]"
+        vault_text = '''\n\n[SYSTEM NOTE: The student has a large document saved, but it is TURNED OFF.]'''
     else:
         vault_text = ""
 
@@ -564,9 +558,7 @@ if username and api_key:
                             st.sidebar.error("Error: The AI could not extract any text from this file.")
                         else:
                             if len(extracted_text) > 35000:
-                                extracted_text = extracted_text[:35000] + "
-
-[SYSTEM WARNING: Document reached the maximum database size. The end of the document was truncated.]"
+                                extracted_text = extracted_text[:35000] + "\n\n[SYSTEM WARNING: Document reached the maximum database size. The end of the document was truncated.]"
                                 
                             user_data["file_vault"] = extracted_text
                             save_current_student(username, user_data)
@@ -615,7 +607,7 @@ if username and api_key:
             role_display = "user" if msg["role"] == "user" else "assistant"
             with st.chat_message(role_display):
                 
-                # --- HISTORICAL WIKIPEDIA MULTI-IMAGE RE-RENDER FIX ---
+                # --- HISTORICAL WIKIMEDIA MULTI-IMAGE RE-RENDER FIX ---
                 display_content = msg["content"]
                 if role_display == "assistant":
                     historical_img_matches = re.findall(r'\[IMAGE_SEARCH:\s*(.*?)\]', display_content, re.IGNORECASE)
@@ -642,7 +634,7 @@ if username and api_key:
                                     st.audio(audio_bytes, format='audio/mp3', autoplay=True)
 
         # --- INPUT & PROCESSING ---
-        st.markdown("""
+        st.markdown('''
             <style>
             [data-testid="stHeader"] {
                 position: fixed !important;
@@ -657,7 +649,7 @@ if username and api_key:
             }
             .block-container { padding-bottom: 180px !important; } 
             </style>
-            """, unsafe_allow_html=True)
+            ''', unsafe_allow_html=True)
 
         user_audio = st.audio_input("🎤 Talk to Christine")
         user_text = st.chat_input("...or type your question here")
@@ -795,8 +787,9 @@ if username and api_key:
                 with st.chat_message("assistant"):
                     with st.spinner("Christine is analyzing..."):
                         try:
+                            # Force use of PRO here
                             model = genai.GenerativeModel(
-                                model_name=PRIMARY_MODEL, 
+                                model_name="gemini-2.5-pro", 
                                 system_instruction=system_instruction
                             )
                             if has_image or has_audio:
@@ -806,6 +799,7 @@ if username and api_key:
                                 chat = model.start_chat(history=chat_history)
                                 response = chat.send_message(display_text)
                         except Exception:
+                            # Fallback to flash-lite only on failure
                             model = genai.GenerativeModel(
                                 model_name=FALLBACK_MODEL, 
                                 system_instruction=system_instruction
