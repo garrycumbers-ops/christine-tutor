@@ -14,7 +14,7 @@ from duckduckgo_search import DDGS
 
 # --- NEW: HYBRID IMAGE ENGINE (SMART DOUBLE-FALLBACK) ---
 def fetch_web_image(search_query):
-    '''Tries DuckDuckGo first. If blocked, tries Wikimedia. If that fails, simplifies the query and tries again.'''
+    """Tries DuckDuckGo first. If blocked, tries Wikimedia. If that fails, simplifies the query and tries again."""
     
     # STEP 1: Try DuckDuckGo
     try:
@@ -194,7 +194,7 @@ if not api_key:
 
 # --- PURE gTTS AUDIO GENERATOR ---
 def generate_audio_bytes(text):
-    '''Uses synchronous gTTS. 100% crash proof inside Streamlit.'''
+    """Uses synchronous gTTS. 100% crash proof inside Streamlit."""
     try:
         safe_text = text[:1500] 
         tts = gTTS(text=safe_text, lang='en', tld='co.uk')
@@ -215,7 +215,7 @@ def clean_text_for_speech(text):
 
 # --- BACKGROUND DOSSIER SAVER (INACTIVITY TIMER) ---
 def background_dossier_save(username, chat_history_str, selected_topic):
-    '''Runs silently in a background thread when the student stops typing for 5 minutes.'''
+    """Runs silently in a background thread when the student stops typing for 5 minutes."""
     try:
         db = load_data()
         if username not in db: return
@@ -223,7 +223,7 @@ def background_dossier_save(username, chat_history_str, selected_topic):
         
         summary_model = genai.GenerativeModel(model_name=FALLBACK_MODEL)
         
-        memory_prompt = f'''
+        memory_prompt = f"""
         You are an expert teacher maintaining a highly compressed, long-term dossier on a student.
         CURRENT DOSSIER: {user_data.get('summary', '')}
         RECENT CHAT: {chat_history_str}
@@ -236,7 +236,7 @@ def background_dossier_save(username, chat_history_str, selected_topic):
         3. GAP TAGS: Start new or updated lines with exact format: [{selected_topic}] GAP:
         4. PRUNE: If they master a previous GAP in {selected_topic}, delete that specific GAP tag. 
         5. DOCUMENT PROGRESS: If they are working on a saved document, explicitly state which specific questions or paragraphs they have ALREADY finished.
-        '''
+        """
         response = summary_model.generate_content(memory_prompt)
         user_data["summary"] = response.text.strip()
         
@@ -263,7 +263,7 @@ def get_system_instruction(age, subject, history_summary, file_vault="", has_hid
     if is_english:
         # ENGLISH / LITERATURE -> Strict AQA Examiner Persona
         aqa_knowledge = st.session_state.get("aqa_knowledge", "[System: AQA Rubric file missing.]")
-        return f'''
+        return f"""
         You are "Christine," an elite Socratic AQA GCSE English Tutor specializing in pushing students from Grade 5s to Grade 9s.
 
         USER PROFILE:
@@ -288,10 +288,10 @@ def get_system_instruction(age, subject, history_summary, file_vault="", has_hid
         4. AQA Marker Persona: When reviewing answers, explicitly map their successes or gaps to the AQA Assessment Objectives (AO1, AO2, AO3) listed in your Knowledge Base. Quote the examiner reports to them if they make common mistakes.
         5. Anti-PEEL: Discourage robotic structures and force perceptive, conceptual tracking.
         6. Voice/Tone: Academic, rigorously challenging, yet encouraging. Never use emojis. NEVER start your response with a microphone emoji.
-        '''
+        """
     else:
         # STEM / HISTORY -> Visual Memory Coach
-        return f'''
+        return f"""
         You are "Christine," an empathetic General Memory Coach and Tutor for STEM, History, and other non-literary subjects.
 
         USER PROFILE:
@@ -309,7 +309,7 @@ def get_system_instruction(age, subject, history_summary, file_vault="", has_hid
            - GOOD SEARCH: [IMAGE_SEARCH: Melting ice]
         3. NO AQA RULES: You are NOT an AQA examiner here. Do not mention Assessment Objectives, "AO1/AO2/AO3", or force "anti-PEEL" analysis.
         4. Voice/Tone: Warm, highly concise, and helpful. 
-        '''
+        """
     
 def convert_history_for_gemini(history):
     gemini_history = []
@@ -564,7 +564,7 @@ if username and api_key:
                     grab_count = st.session_state.unsummarized_messages
                     recent_chat = str(user_data["history"][-grab_count:]) 
                     
-                    memory_prompt = f'''
+                    memory_prompt = f"""
                     You are an expert teacher maintaining a highly compressed, long-term dossier on a student.
                     CURRENT DOSSIER: {user_data.get('summary', '')}
                     RECENT CHAT: {recent_chat}
@@ -577,7 +577,7 @@ if username and api_key:
                     3. GAP TAGS: Start new or updated lines with exact format: [{selected_topic}] GAP:
                     4. PRUNE: If they master a previous GAP in {selected_topic}, delete that specific GAP tag. 
                     5. DOCUMENT PROGRESS: If they are working on a saved document, explicitly state which specific questions or paragraphs they have ALREADY finished.
-                    '''
+                    """
                     try:
                         analyzer = genai.GenerativeModel(model_name="gemini-1.5-flash-8b")
                         memory_response = analyzer.generate_content(memory_prompt)
@@ -623,7 +623,7 @@ if username and api_key:
                                     st.audio(audio_bytes, format='audio/mp3', autoplay=True)
 
         # --- INPUT & PROCESSING ---
-        st.markdown(\"""
+        st.markdown("""
             <style>
             [data-testid="stHeader"] {
                 position: fixed !important;
@@ -638,7 +638,7 @@ if username and api_key:
             }
             .block-container { padding-bottom: 180px !important; } 
             </style>
-            \""", unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
 
         user_audio = st.audio_input("🎤 Talk to Christine")
         user_text = st.chat_input("...or type your question here")
@@ -704,11 +704,11 @@ if username and api_key:
                         current_turn_content.append(pil_image)
                     
                     if image_action == "Review my essay/paragraph (AQA Mark Scheme)":
-                        action_prompt = '''SYSTEM OVERRIDE: Act as a strict AQA Examiner. Do NOT rewrite the essay. Tell me which AOs (AO1, AO2, AO3) I am hitting, find the weakest sentence, and ask a Socratic question to force me to elevate it.'''
+                        action_prompt = """SYSTEM OVERRIDE: Act as a strict AQA Examiner. Do NOT rewrite the essay. Tell me which AOs (AO1, AO2, AO3) I am hitting, find the weakest sentence, and ask a Socratic question to force me to elevate it."""
                     elif image_action == "Socratic Extract Analysis (Guide me)":
                         action_prompt = "SYSTEM OVERRIDE: Analyze this extract. Do not give me answers. Ask the first Socratic question about the writer's methods to begin analysis."
                     elif image_action == "Blind Analysis Practice (Unseen Text)":
-                        action_prompt = '''SYSTEM OVERRIDE: Treat this as an AQA 'Unseen' text. Give me ZERO context. Ask a question forcing me to build a literary map from scratch based only on the language.'''
+                        action_prompt = """SYSTEM OVERRIDE: Treat this as an AQA 'Unseen' text. Give me ZERO context. Ask a question forcing me to build a literary map from scratch based only on the language."""
                     elif image_action == "Help me upgrade my vocabulary/argument":
                         action_prompt = "SYSTEM OVERRIDE: Help me move away from basic PEEL paragraphs. Ask me a highly perceptive question about the overarching theme."
                     else:
