@@ -12,14 +12,18 @@ import time
 import requests
 from duckduckgo_search import DDGS
 
-# --- NEW: HYBRID IMAGE ENGINE (SMART DOUBLE-FALLBACK) ---
+# --- NEW: HYBRID IMAGE ENGINE WITH LIVE UI DEBUGGING ---
 def fetch_web_image(search_query):
     """Tries DuckDuckGo first. If blocked, tries Wikimedia. If that fails, simplifies the query and tries again."""
     
     # STEP 1: Try DuckDuckGo
     try:
+        st.write(f"🦆 **DuckDuckGo:** Searching for `[{search_query}]`...")
         results = DDGS().images(search_query, max_results=3, safesearch='Moderate')
+        if not results:
+             st.write("⚠️ *DuckDuckGo returned 0 results. (Likely a bot-block)*")
         if results and len(results) > 0:
+            st.write(f"✅ *DuckDuckGo found {len(results)} images!*")
             for r in results:
                 if r.get('image'): return r.get('image')
                 
@@ -27,16 +31,21 @@ def fetch_web_image(search_query):
         words = search_query.split()
         if len(words) > 2:
             short_query = " ".join(words[:2])
+            st.write(f"✂️ **DuckDuckGo Fallback:** Chopping query down to `[{short_query}]`...")
             short_results = DDGS().images(short_query, max_results=3)
+            if not short_results:
+                 st.write("⚠️ *DuckDuckGo fallback returned 0 results.*")
             if short_results and len(short_results) > 0:
+                st.write(f"✅ *DuckDuckGo fallback found {len(short_results)} images!*")
                 for r in short_results:
                     if r.get('image'): return r.get('image')
     except Exception as e:
-        print(f"DDG Search Error: {e}")
+        st.write(f"🛑 *DuckDuckGo Crash Error: {e}*")
         
-    # STEP 2: Fallback to Wikimedia Commons (100% reliable for basic nouns)
+    # STEP 2: Fallback to Wikimedia Commons
     def ask_wikimedia(query):
         try:
+            st.write(f"🏛️ **Wikimedia Commons:** Searching for `[{query}]`...")
             url = "https://commons.wikimedia.org/w/api.php"
             clean_query = f"{query} filetype:bitmap"
             params = {
@@ -53,7 +62,11 @@ def fetch_web_image(search_query):
             response = requests.get(url, params=params, timeout=5).json()
             pages = response.get("query", {}).get("pages", {})
             
+            if not pages:
+                 st.write("⚠️ *Wikimedia returned 0 matches.*")
+                 
             if pages:
+                st.write(f"✅ *Wikimedia found {len(pages)} matching files!*")
                 for page_id, page_data in pages.items():
                     image_info = page_data.get("imageinfo", [])
                     if image_info:
@@ -61,19 +74,18 @@ def fetch_web_image(search_query):
                         if img_url and not img_url.lower().endswith(('.svg', '.pdf', '.djvu')):
                             return img_url
         except Exception as e:
-            print(f"Wikimedia API Error: {e}")
+            st.write(f"🛑 *Wikimedia API Error: {e}*")
         return None
 
     # Try full query on Wikimedia
-    print(f"DDG failed for '{search_query}'. Trying Wikimedia Commons...")
     wiki_img = ask_wikimedia(search_query)
     if wiki_img: return wiki_img
     
-    # Try simplified query on Wikimedia (strips adjectives like "basic" or "diagram")
+    # Try simplified query on Wikimedia 
     words = search_query.split()
     if len(words) > 1:
         short_wiki_query = " ".join(words[:2])
-        print(f"Full Wiki query failed. Retrying with: '{short_wiki_query}'...")
+        st.write(f"✂️ **Wikimedia Fallback:** Chopping query down to `[{short_wiki_query}]`...")
         short_wiki_img = ask_wikimedia(short_wiki_query)
         if short_wiki_img: return short_wiki_img
 
@@ -802,10 +814,7 @@ if username and api_key:
                         answer = response.text.replace("🎤 Voice Response", "").replace("🎤 Voice response", "").replace("🎤 Voice Message", "").replace("🎤 [Voice Message]", "").replace("*[🎤 Voice Message]*", "").strip()
                         
                         # --- NEW: MULTI-IMAGE WEB INTERCEPTOR ---
-                        # 1. Find ALL image requests in the text
                         img_matches = re.findall(r'\[IMAGE_SEARCH:\s*(.*?)\]', answer, re.IGNORECASE)
-                        
-                        # 2. Erase the secret tags from the text the student sees
                         display_answer = re.sub(r'\[IMAGE_SEARCH:\s*.*?\]', '', answer, flags=re.IGNORECASE).strip()
                         
                         if not display_answer:
@@ -814,21 +823,26 @@ if username and api_key:
                         # 3. Display the text first
                         st.markdown(display_answer)
                         
-                        # 4. Loop through and display every requested image using DuckDuckGo
+                        # 4. Loop through and display every requested image with LIVE DEBUGGER
                         history_tags = ""
                         if img_matches:
                             for search_term in img_matches:
                                 history_tags += f"\n\n[IMAGE_SEARCH: {search_term}]"
-                                with st.spinner(f"🔍 Fetching web image for '{search_term}'..."):
+                                
+                                # Use Streamlit's st.status to show the live work
+                                with st.status(f"🔍 Searching the web for: '{search_term}'...", expanded=True) as status:
                                     image_url = fetch_web_image(search_term)
+                                    
+                                    if image_url:
+                                        status.update(label=f"✅ Found image for '{search_term}'", state="complete", expanded=False)
+                                    else:
+                                        status.update(label=f"❌ No image found for '{search_term}'", state="error", expanded=True)
                                 
                                 if image_url:
                                     try:
                                         st.image(image_url, caption=f"Visual Reference: {search_term}", use_container_width=True)
                                     except:
                                         st.caption(f"*(Attempted to load an image for {search_term}, but the link was invalid.)*")
-                                else:
-                                    st.caption(f"*(Attempted to load an image for {search_term}, but could not find a clear match.)*")
                         
                         history_answer = display_answer + history_tags
                         
