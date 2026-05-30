@@ -52,7 +52,7 @@ def fetch_web_image(search_query):
                 "format": "json",
                 "generator": "search",
                 "gsrsearch": query,
-                "gsrlimit": 1,
+                "gsrlimit": 3,
                 "prop": "pageimages",
                 "pithumbsize": 800
             }
