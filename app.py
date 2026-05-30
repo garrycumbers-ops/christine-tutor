@@ -58,6 +58,7 @@ def fetch_web_image(search_query):
             }
             headers = {
                 "User-Agent": "ChristineAITutor/1.0 (Educational App)"
+            }
             response = requests.get(url, params=params, headers=headers, timeout=5).json()
             pages = response.get("query", {}).get("pages", {})
             
