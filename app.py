@@ -56,8 +56,9 @@ def fetch_web_image(search_query):
                 "prop": "pageimages",
                 "pithumbsize": 800
             }
-            
-            response = requests.get(url, params=params, timeout=5).json()
+            headers = {
+                "User-Agent": "ChristineAITutor/1.0 (Educational App)"
+            response = requests.get(url, params=params, headers=headers, timeout=5).json()
             pages = response.get("query", {}).get("pages", {})
             
             if not pages:
