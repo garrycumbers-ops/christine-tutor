@@ -450,19 +450,20 @@ if username and api_key:
         
         # --- MASTERY PERCENTAGE TRACKER ---
         st.sidebar.divider()
-        st.sidebar.markdown(f"### 🏆 {selected_topic} Brain Power")
+        st.sidebar.markdown("### 🏆 " + selected_topic + " Brain Power")
 
         dossier_text = user_data["summary"] if user_data.get("summary") else ""
-        safe_topic = re.escape(selected_topic)
-
-        topic_words = re.findall(r'[A-Za-z0-9]+', selected_topic)
-        if topic_words:
-            fuzzy_pattern = r'[^A-Za-z0-9]*'.join([rf' {w} ' for w in topic_words])
-            mastered_count = len(re.findall(rf'{fuzzy_pattern}[^\[]{{0,40}}?mastered', dossier_text, flags=re.IGNORECASE | re.DOTALL))
-            gap_count = len(re.findall(rf'{fuzzy_pattern}[^\[]{{0,40}}?gap', dossier_text, flags=re.IGNORECASE | re.DOTALL))
-        else:
-            mastered_count = 0
-            gap_count = 0
+        
+        mastered_count = 0
+        gap_count = 0
+        
+        # Foolproof line-by-line scanner
+        for line in dossier_text.split('\n'):
+            if selected_topic.lower() in line.lower():
+                if 'mastered' in line.lower():
+                    mastered_count += 1
+                elif 'gap' in line.lower():
+                    gap_count += 1
 
         total_tracked = mastered_count + gap_count
 
@@ -477,8 +478,8 @@ if username and api_key:
             st.balloons() 
             st.session_state["celebrated_topic"] = selected_topic
 
-        st.sidebar.metric(label=f"Topic Mastery", value=f"{mastery_percentage}%")
-        st.sidebar.caption(f"**{mastered_count}** Mastered | **{gap_count}** Gaps in {selected_topic}")
+        st.sidebar.metric(label="Topic Mastery", value=str(mastery_percentage) + "%")
+        st.sidebar.caption("**" + str(mastered_count) + "** Mastered | **" + str(gap_count) + "** Gaps in " + selected_topic)
         
         st.sidebar.markdown("---")
         
