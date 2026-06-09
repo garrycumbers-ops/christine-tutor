@@ -534,7 +534,6 @@ if username and api_key:
             if st.sidebar.button("🗑️ Clear Vault"):
                 user_data["file_vault"] = ""
                 save_current_student(username, user_data)
-                st.session_state.use_vault = False
                 st.rerun()
                 
         elif file_input or st.session_state.captured_image:
